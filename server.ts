@@ -6,6 +6,81 @@ import nodemailer from 'nodemailer';
 import TelegramBot from 'node-telegram-bot-api';
 import fs from 'fs';
 import crypto from 'crypto';
+import os from 'os';
+
+// --- IP & Base URL auto-detection ---
+let detectedServerIP = '127.0.0.1';
+
+async function autoDetectPublicIP() {
+  try {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), 1500);
+    const res = await fetch('https://api.ipify.org', { signal: controller.signal });
+    clearTimeout(id);
+    if (res.ok) {
+       const ip = (await res.text()).trim();
+       if (ip) {
+         detectedServerIP = ip;
+         return ip;
+       }
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  try {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), 1500);
+    const res = await fetch('https://ifconfig.me/ip', { signal: controller.signal });
+    clearTimeout(id);
+    if (res.ok) {
+       const ip = (await res.text()).trim();
+       if (ip) {
+         detectedServerIP = ip;
+         return ip;
+       }
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  try {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+      for (const iface of interfaces[name] || []) {
+        if (iface.family === 'IPv4' && !iface.internal) {
+          detectedServerIP = iface.address;
+          return iface.address;
+        }
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  return detectedServerIP;
+}
+
+function getBaseUrl(): string {
+  if (process.env.PUBLIC_URL && process.env.PUBLIC_URL !== 'MY_APP_URL') {
+    return process.env.PUBLIC_URL.trim();
+  }
+  
+  if (process.env.DOMAIN_NAME && process.env.DOMAIN_NAME.trim() !== '') {
+    const domain = process.env.DOMAIN_NAME.trim();
+    const cleanDomain = domain.replace(/^(https?:\/\/)?/, '');
+    const useSSL = process.env.INSTALL_SSL === 'y' || process.env.INSTALL_SSL === 'Y' || process.env.INSTALL_SSL === 'true';
+    return `${useSSL ? 'https' : 'http'}://${cleanDomain}`;
+  }
+  
+  const port = process.env.APP_PORT || process.env.PORT || 3000;
+  
+  if (process.env.APP_URL && process.env.APP_URL !== 'MY_APP_URL') {
+    return process.env.APP_URL.trim();
+  }
+
+  return `http://${detectedServerIP}:${port}`;
+}
 
 // --- System Types ---
 interface Product {
@@ -338,7 +413,7 @@ function initTelegramBot() {
       telegramBot.onText(/\/start/, (msg) => {
         const chatId = msg.chat.id;
         const adminRole = isAdmin(chatId) ? "👑 شما به عنوان مدیر شناخته شدید.\n" : "";
-        const baseWebUrl = process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`;
+        const baseWebUrl = getBaseUrl();
         
         const opts = {
           reply_markup: {
@@ -402,7 +477,7 @@ function initTelegramBot() {
           const pId = query.data.split('_')[2];
           const pr = products.find(p => String(p.id) === pId);
           if (pr) {
-             const baseWebUrl = process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`;
+             const baseWebUrl = getBaseUrl();
              const text = `<b>💎 ${pr.title}</b>\n\n📌 توضیحات: ${pr.desc}\n💰 قیمت کالا: ${pr.price}\n🔹 نوع خدمت: ${pr.type === 'account' ? 'تحویل اکانت' : 'خدمات ساخت و مشاوره'}`;
              telegramBot!.sendMessage(chatId, text, {
                 parse_mode: 'HTML',
@@ -477,7 +552,7 @@ async function initBaleBot() {
 
               if (text.startsWith('/start')) {
                 const adminRole = isAdmin(chatId) ? "👑 شما مدیر اصلی هستید.\n" : "";
-                const baseWebUrl = process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`;
+                const baseWebUrl = getBaseUrl();
                 await sendBaleMessage(chatId, `سلام! به ربات بله دیجیتال استور خوش آمدید. 🛍️\n\n${adminRole}لطفا برای سفارش دهی یا پیگیری خرید خود اقدام کنید:`, [
                   [{ text: '🛒 محصولات و خدمات', callback_data: 'products' }],
                   [{ text: '📦 پیگیری سفارشات', callback_data: 'orders' }],
@@ -529,7 +604,7 @@ async function initBaleBot() {
                   const pId = callbackData.split('_')[1];
                   const p = products.find(x => String(x.id) === pId);
                   if (p) {
-                    const baseWebUrl = process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`;
+                    const baseWebUrl = getBaseUrl();
                     await sendBaleMessage(chatId, `💎 *${p.title}*\n💵 قیمت: ${p.price}\n📝 ${p.desc}\n\nجهت سفارش سریع به وب‌سایت زیر مراجعه کنید:\n${baseWebUrl}`);
                   }
                 }
@@ -917,8 +992,9 @@ async function startServer() {
 
   startAutomaticBackupScheduler();
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[SERVER] Fullstack Server running on http://localhost:${PORT}`);
+  app.listen(PORT, '0.0.0.0', async () => {
+    await autoDetectPublicIP();
+    console.log(`[SERVER] Fullstack Server running on ${getBaseUrl()}`);
   });
 }
 
