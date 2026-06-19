@@ -34,19 +34,19 @@ install_app() {
     echo "=========================================="
     echo "تنظیمات اولیه"
     echo "=========================================="
-    read -p "انتخاب پورت (پیشفرض: 3000): " USER_PORT
+    read -p "انتخاب پورت (پیشفرض: 3000): " USER_PORT < /dev/tty
     USER_PORT=${USER_PORT:-3000}
     
-    read -p "شناسه کاربری ادمین (پیشفرض: admin): " ADMIN_USERNAME
+    read -p "شناسه کاربری ادمین (پیشفرض: admin): " ADMIN_USERNAME < /dev/tty
     ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
     
-    read -s -p "رمز عبور ادمین (پیشفرض: 1234): " ADMIN_PASSWORD
+    read -s -p "رمز عبور ادمین (پیشفرض: 1234): " ADMIN_PASSWORD < /dev/tty
     echo ""
     ADMIN_PASSWORD=${ADMIN_PASSWORD:-1234}
     
-    read -p "آیا دامنه ای برای اتصال دارید؟ (در صورت نداشتن اینتر بزنید تا رد شود): " DOMAIN_NAME
+    read -p "آیا دامنه ای برای اتصال دارید؟ (در صورت نداشتن اینتر بزنید تا رد شود): " DOMAIN_NAME < /dev/tty
     if [ ! -z "$DOMAIN_NAME" ]; then
-        read -p "آیا میخواهید SSL (رایگان Certbot) نصب شود؟ (y/N) " INSTALL_SSL
+        read -p "آیا میخواهید SSL (رایگان Certbot) نصب شود؟ (y/N) " INSTALL_SSL < /dev/tty
     fi
     
     echo "در حال آپدیت سیستم و نصب پیش‌نیازها..."
@@ -78,7 +78,8 @@ install_app() {
 
     echo "نصب PM2 و اجرای سرور..."
     npm install -g pm2
-    pm2 start dist/server.cjs --name digital-store
+    APP_PM2_NAME="digital-store-$USER_PORT"
+    pm2 start dist/server.cjs --name $APP_PM2_NAME
     pm2 save
     pm2 startup
     
@@ -160,19 +161,19 @@ update_app() {
     CURRENT_ADMIN=${CURRENT_ADMIN:-admin}
     CURRENT_PASS=${CURRENT_PASS:-1234}
     
-    read -p "انتخاب پورت (پیشفرض: $CURRENT_PORT): " USER_PORT
+    read -p "انتخاب پورت (پیشفرض: $CURRENT_PORT): " USER_PORT < /dev/tty
     USER_PORT=${USER_PORT:-$CURRENT_PORT}
     
-    read -p "شناسه کاربری ادمین (پیشفرض: $CURRENT_ADMIN): " ADMIN_USERNAME
+    read -p "شناسه کاربری ادمین (پیشفرض: $CURRENT_ADMIN): " ADMIN_USERNAME < /dev/tty
     ADMIN_USERNAME=${ADMIN_USERNAME:-$CURRENT_ADMIN}
     
-    read -s -p "رمز عبور ادمین (در صورت خالی گذاشتن تغییر نمیکند): " ADMIN_PASSWORD
+    read -s -p "رمز عبور ادمین (در صورت خالی گذاشتن تغییر نمیکند): " ADMIN_PASSWORD < /dev/tty
     echo ""
     ADMIN_PASSWORD=${ADMIN_PASSWORD:-$CURRENT_PASS}
     
-    read -p "آیا دامنه ای برای اتصال دارید؟ (در صورت نداشتن اینتر بزنید تا رد شود): " DOMAIN_NAME
+    read -p "آیا دامنه ای برای اتصال دارید؟ (در صورت نداشتن اینتر بزنید تا رد شود): " DOMAIN_NAME < /dev/tty
     if [ ! -z "$DOMAIN_NAME" ]; then
-        read -p "آیا میخواهید SSL (رایگان Certbot) نصب/بروز رسانی شود؟ (y/N) " INSTALL_SSL
+        read -p "آیا میخواهید SSL (رایگان Certbot) نصب/بروز رسانی شود؟ (y/N) " INSTALL_SSL < /dev/tty
     fi
     
     echo "در حال دریافت آخرین تغییرات..."
@@ -197,7 +198,8 @@ update_app() {
     npm run build
 
     echo "ری‌استارت سرور..."
-    pm2 restart digital-store || pm2 start dist/server.cjs --name digital-store
+    APP_PM2_NAME="digital-store-$USER_PORT"
+    pm2 restart $APP_PM2_NAME || pm2 start dist/server.cjs --name $APP_PM2_NAME
     pm2 save
     
     ufw allow $USER_PORT
@@ -256,9 +258,16 @@ EOF
 
 uninstall_app() {
     echo "اخطار: این عملیات قابل بازگشت نیست و تمامی اطلاعات و فایل‌ها پاک خواهند شد!"
-    read -p "آیا مطمان هستید؟ (y/N) " confirm
+    read -p "آیا مطمان هستید؟ (y/N) " confirm < /dev/tty
     if [[ "$confirm" =~ ^[Yy]$ ]]; then
         echo "در حال متوقف کردن سرور..."
+        if [ -f "$APP_DIR/.env" ]; then
+            P_USER_PORT=$(grep -E "^APP_PORT=" "$APP_DIR/.env" | cut -d '=' -f2) || true
+            if [ ! -z "$P_USER_PORT" ]; then
+                pm2 stop "digital-store-$P_USER_PORT" || true
+                pm2 delete "digital-store-$P_USER_PORT" || true
+            fi
+        fi
         pm2 stop digital-store || true
         pm2 delete digital-store || true
         pm2 save || true
@@ -270,7 +279,7 @@ uninstall_app() {
     else
         echo "عملیات لغو شد."
     fi
-    read -p "Press enter to return..."
+    read -p "Press enter to return..." < /dev/tty
 }
 
 while true; do
@@ -280,7 +289,7 @@ while true; do
     echo "3) حذف نصب (Uninstall)"
     echo "0) خروج"
     echo ""
-    read -p "انتخاب شما: " choice
+    read -p "انتخاب شما: " choice < /dev/tty
 
     case $choice in
         1)
