@@ -14,7 +14,7 @@ export default function Admin() {
   const navigate = useNavigate();
 
   // Settings & DB State
-  const [adminSettings, setAdminSettings] = useState({ telegramToken: '', baleToken: '', adminIdNumber: '', smtpHost: '', smtpPort: '', smtpUser: '', smtpPass: '', enableMobileLogin: true });
+  const [adminSettings, setAdminSettings] = useState({ telegramToken: '', baleToken: '', adminTelegramChatId: '', adminBaleChatId: '', adminIdNumber: '', smtpHost: '', smtpPort: '', smtpUser: '', smtpPass: '', enableMobileLogin: true });
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -643,7 +643,31 @@ export default function Admin() {
 
              <div className="glass-panel p-6 space-y-6 border border-zinc-805/40 pb-8 rounded-2xl bg-zinc-900/30">
                 <div>
-                   <label className="text-sm font-bold text-zinc-300 block mb-2">شناسه ادمین اصلی (جهت دریافت اطلاعیه‌ها در ربات)</label>
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-zinc-950/40 rounded-2xl border border-zinc-800/40 -mx-4 mb-4">
+                      <div>
+                        <label className="text-sm font-bold text-zinc-300 block mb-2">شناسه ادمین تلگرام (Telegram Admin Chat ID)</label>
+                        <input 
+                          type="text" 
+                          value={adminSettings.adminTelegramChatId || ''} 
+                          onChange={e => setAdminSettings({...adminSettings, adminTelegramChatId: e.target.value})}
+                          className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-white outline-none focus:border-indigo-500 transition-colors" 
+                          dir="ltr" 
+                          placeholder="e.g. 123456789"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-bold text-zinc-300 block mb-2">شناسه ادمین بله (Bale Admin Chat ID)</label>
+                        <input 
+                          type="text" 
+                          value={adminSettings.adminBaleChatId || ''} 
+                          onChange={e => setAdminSettings({...adminSettings, adminBaleChatId: e.target.value})}
+                          className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-white outline-none focus:border-indigo-500 transition-colors" 
+                          dir="ltr" 
+                          placeholder="e.g. 987654321"
+                        />
+                      </div>
+                    </div>
+                    <label className="text-xs font-bold text-zinc-500 block mb-2">شناسه ادمین عمومی (فیلد همگام قدیمی کاربری):</label>
                    <input 
                      type="text" 
                      value={adminSettings.adminIdNumber || ''} 

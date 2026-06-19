@@ -26,6 +26,8 @@ let chats = [
 let settings = {
   telegramToken: '',
   baleToken: '',
+  adminTelegramChatId: '',
+  adminBaleChatId: '',
   adminIdNumber: '',
   smtpHost: '',
   smtpPort: '',
@@ -141,6 +143,29 @@ async function pollBale() {
   setTimeout(pollBale, 1000);
 }
 
+// Active states for checkout flow and admin panel overrides
+const userCheckoutStates: Record<string, { productId: number }> = {};
+const adminModeOverride: Record<string, 'admin' | 'user'> = {};
+
+// Helper to send JSON backup as a document
+async function sendBotDocument(apiHost: string, token: string, chatId: number, filename: string, content: string) {
+  try {
+    const formData = new FormData();
+    formData.append('chat_id', chatId.toString());
+    const blob = new Blob([content], { type: 'application/json' });
+    formData.append('document', blob, filename);
+    
+    const res = await fetch(`${apiHost}/bot${token}/sendDocument`, {
+      method: 'POST',
+      body: formData
+    });
+    return res.ok;
+  } catch (err) {
+    console.error('Error sending bot document:', err);
+    return false;
+  }
+}
+
 // Process incoming bot chat messages
 async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
   const message = update.message || update.edited_message;
@@ -163,7 +188,123 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
     });
   }
 
-  // Handle Shared Contact
+  // Determine if sender is Admin based on Telegram/Bale specific settings or fallback
+  const isAdmin = 
+    (platform === 'telegram' && settings.adminTelegramChatId && String(chat.id) === String(settings.adminTelegramChatId)) ||
+    (platform === 'bale' && settings.adminBaleChatId && String(chat.id) === String(settings.adminBaleChatId)) ||
+    (settings.adminIdNumber && String(chat.id) === String(settings.adminIdNumber));
+
+  // Default mode for Admin is 'admin' unless they override it to act as 'user'
+  const currentMode = isAdmin ? (adminModeOverride[chat.id] || 'admin') : 'user';
+
+  // Keyboards Def
+  const adminKeyboard = {
+    keyboard: [
+      [{ text: "📊 وضعیت سیستم" }, { text: "💾 دانلود بکاپ کلی" }],
+      [{ text: "🔐 فعال/غیرفعال‌سازی لاگین موبایل" }, { text: "👤 سوییچ به پنل کاربری" }]
+    ],
+    resize_keyboard: true
+  };
+
+  const getUserKeyboard = (isAdminUser: boolean) => {
+    const kb = [
+      [{ text: "🛒 لیست محصولات و خدمات" }, { text: "📦 پیگیری سفارشات من" }],
+      [{ text: "🔑 دریافت کد دو مرحله‌ای ورود" }, { text: "💬 ارتباط با پشتیبانی" }]
+    ];
+    if (isAdminUser) {
+      kb.push([{ text: "⚙️ برگشت به پنل مدیریت" }]);
+    }
+    return { keyboard: kb, resize_keyboard: true };
+  };
+
+  const registerKeyboard = {
+    keyboard: [
+      [{ text: "ارسال شماره موبایل 📱", request_contact: true }]
+    ],
+    resize_keyboard: true,
+    one_time_keyboard: true
+  };
+
+  // --- ADMIN COMMANDS INTERFACE ---
+  if (isAdmin && currentMode === 'admin') {
+    if (text === '/start' || text.toLowerCase() === 'سلام' || text === '⚙️ برگشت به پنل مدیریت') {
+      adminModeOverride[chat.id] = 'admin'; // ensure reset
+      await reply(
+        `سلام مدیر محترم! 👑\nبه پنل ارشد مدیریت ربات هوشمند دیجیتال استور خوش آمدید.\n\nشما به بخش تنظیمات زنده، دریافت فاکتورها، و پشتیبان‌گیری کل سرور دسترسی مستقیم دارید.\n\nلطفاً از دکمه‌های کنترل هوشمند زیر استفاده کنید:`,
+        adminKeyboard
+      );
+      return;
+    }
+
+    if (text === "📊 وضعیت سیستم") {
+      const testNumber = (str: string) => {
+        const cleanNum = str.replace(/[^\d]/g, '');
+        return parseInt(cleanNum, 10) || 0;
+      };
+      const totalRevenue = orders.filter(o => o.status === 'completed').reduce((sum, o) => sum + testNumber(o.price), 0);
+      const pendingCount = orders.filter(o => o.status === 'pending').length;
+      
+      const statsText = 
+        `📊 **گزارش لحظه‌ای وضعیت سیستم دیجیتال استور** 📊\n\n` +
+        `💰 **کل فروش تایید شده**: ${totalRevenue.toLocaleString('fa-IR')} تومان\n` +
+        `⏳ **سفارشات در انتظار بررسی**: ${pendingCount} عدد\n` +
+        `📦 **تعداد کل فاکتورها**: ${orders.length} عدد\n` +
+        `👥 **کاربران همگام شده با ربات‌ها**: ${botUsers.length} نفر\n` +
+        `🛍️ **تعداد محصولات فعال**: ${products.filter(p => p.active !== false).length} از ${products.length} محصول\n` +
+        `🔐 **وضعیت لاگین دو مرحله‌ای پیام‌رسان**: ${settings.enableMobileLogin ? '🟢 فعال' : '🔴 غیرفعال'}`;
+      
+      await reply(statsText, adminKeyboard);
+      return;
+    }
+
+    if (text === "💾 دانلود بکاپ کلی") {
+      await reply("⏳ در حال آماده‌سازی و ارسال فایل پشتیبان پایگاه داده...", adminKeyboard);
+      const backupContent = JSON.stringify({ products, orders, users, chats, settings, botUsers, timestamp: new Date() }, null, 2);
+      const success = await sendBotDocument(apiHost, token, chat.id, `digital_store_backup_${Date.now()}.json`, backupContent);
+      if (!success) {
+        await reply("❌ خطا در ارسال فایل بکاپ رخ داد. در حال ارسال ۱۰۰۰ کاراکتر اول به صورت متنی:\n\n" + backupContent.substring(0, 1000) + "\n...", adminKeyboard);
+      } else {
+        await reply("✅ فایل بکاپ کامل (.json) با موفقیت ارسال شد.", adminKeyboard);
+      }
+      return;
+    }
+
+    if (text === "🔐 فعال/غیرفعال‌سازی لاگین موبایل") {
+      settings.enableMobileLogin = !settings.enableMobileLogin;
+      saveDatabase();
+      await reply(
+        `🔐 وضعیت ورود دو مرحله‌ای موبایل در کل سیستم همگام شد.\n\nوضعیت جدید: ${settings.enableMobileLogin ? '🟢 فعال (کاربران مجاز به دریافت کد هستند)' : '🔴 غیرفعال (ارسال پیامک/کد مسدود شد)'}`,
+        adminKeyboard
+      );
+      return;
+    }
+
+    if (text === "👤 سوییچ به پنل کاربری") {
+      adminModeOverride[chat.id] = 'user';
+      await reply(
+        `👤 با موفقیت به نمای کاربری سوییچ کردید.\n\nاکنون می‌توانید منوی سفارشات، فاکتورهای فروشگاه و دریافت کدهای تایید را عینا مشابه خریداران تست نمایید.`,
+        getUserKeyboard(true)
+      );
+      return;
+    }
+
+    // Admin general support command / interactive guide
+    await reply(
+      `مدیر گرامی، دستور "${text}" شناسایی نشد.\n\nلطفاً از دکمه‌های ناوبری زیر سیستم استفاده کنید:`,
+      adminKeyboard
+    );
+    return;
+  }
+
+  // --- REGULAR USER / CUSTOMER FLOWS WITH ACTIVE STORE MENU ---
+
+  // Helper check: Is this chat registered with a phone number?
+  const userMap = botUsers.find(u => 
+    (platform === 'telegram' && u.telegramChatId === chat.id) || 
+    (platform === 'bale' && u.baleChatId === chat.id)
+  );
+
+  // Handle Shared Contact Registration
   if (contact && contact.phone_number) {
     let rawPhone = contact.phone_number;
     let phone = rawPhone.replace(/\D/g, '');
@@ -173,62 +314,243 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
       phone = '0' + phone;
     }
 
-    let userMap = botUsers.find(u => u.phone === phone);
-    if (!userMap) {
-      userMap = { phone };
-      botUsers.push(userMap);
+    let newUser = botUsers.find(u => u.phone === phone);
+    if (!newUser) {
+      newUser = { phone };
+      botUsers.push(newUser);
     }
     if (platform === 'telegram') {
-      userMap.telegramChatId = chat.id;
+      newUser.telegramChatId = chat.id;
     } else {
-      userMap.baleChatId = chat.id;
+      newUser.baleChatId = chat.id;
     }
 
     saveDatabase();
 
-    await reply(`✅ شماره تلفن شما (${phone}) با موفقیت به سیستم متمرکز دیجیتال استور متصل شد.\n\nاز این پس تمامی کدهای یکبار مصرف ورود به سایت بلافاصله در همین چت برای شما فرستاده می‌شود.`);
-    return;
-  }
-
-  // Handle Text inputs
-  if (text === '/start' || text.toLowerCase() === 'سلام') {
     await reply(
-      `سلام! به ربات پشتیبانی و احراز هویت هوشمند دیجیتال استور خوش آمدید. 👋\n\nبرای همگام‌سازی سریع حساب و دریافت لحظه‌ای کدهای تایید در پیام‌رسان ${platformName}، لطفا شماره تلفن ۱۱ رقمی خود را تایپ کنید (مثلاً: 09123456789) یا دکمه زیر را جهت ارسال شماره فشار دهید:`,
-      {
-        keyboard: [
-          [{ text: "ارسال شماره موبایل 📱", request_contact: true }]
-        ],
-        resize_keyboard: true,
-        one_time_keyboard: true
-      }
+      `✅ شماره تلفن شما (${phone}) با موفقیت به سیستم متمرکز دیجیتال استور متصل شد.\n\n🛍️ منوی کامل فروشگاه، فاکتورهای من و خدمات آنلاین اکنون برای شما آماده و فعال است!`,
+      getUserKeyboard(isAdmin)
     );
     return;
   }
 
-  // Handle Raw Phone typing (e.g. 09123456789)
+  // Handle Raw Phone typing registration
   const phoneRegex = /^(09\d{9})$/;
   const match = text.match(phoneRegex);
   if (match) {
     const phone = match[1];
-    let userMap = botUsers.find(u => u.phone === phone);
-    if (!userMap) {
-      userMap = { phone };
-      botUsers.push(userMap);
+    let newUser = botUsers.find(u => u.phone === phone);
+    if (!newUser) {
+      newUser = { phone };
+      botUsers.push(newUser);
     }
     if (platform === 'telegram') {
-      userMap.telegramChatId = chat.id;
+      newUser.telegramChatId = chat.id;
     } else {
-      userMap.baleChatId = chat.id;
+      newUser.baleChatId = chat.id;
     }
 
     saveDatabase();
 
-    await reply(`✅ شماره تلفن شما (${phone}) با موفقیت ارزیابی و ثبت شد.\nاکنون می‌توانید در سایت درخواست ارسال کد تایید با شماره موبایل بدهید.`);
+    await reply(
+      `✅ شماره تلفن شما (${phone}) با موفقیت ارزیابی و ثبت شد.\n\n🛍️ منوی کامل فروشگاه، فاکتورها و دریافت هوشمند کد تایید برای شما باز شد.`,
+      getUserKeyboard(isAdmin)
+    );
     return;
   }
 
-  // Help fallback info
-  await reply(`پیام شما دریافت شد. جهت فعالسازی ورود با شماره، لطفا شماره تلفن خود را ارسال کنید یا دکمه اشتراک‌گذاری شماره را بزنید.\nشناسه چت شما: ${chat.id}`);
+  // If user is NOT registered, they must send their phone first
+  if (!userMap) {
+    await reply(
+      `سلام! به ربات پشتیبانی و احراز هویت هوشمند دیجیتال استور خوش آمدید. 👋\n\nبرای همگام‌سازی سریع حساب و دریافت لحظه‌ای کدهای تایید در پیام‌رسان ${platformName}، لطفا شماره تلفن ۱۱ رقمی خود را تایپ کنید (مثلاً: 09123456789) یا دکمه زیر را جهت ارسال شماره فشار دهید:`,
+      registerKeyboard
+    );
+    return;
+  }
+
+  // --- REGISTERED USERS' INTERACTIVE CLIENT (THE ACTUAL STORE MENU) ---
+
+  // Handle Switch Back to Admin Panel if they are an admin
+  if (isAdmin && text === '⚙️ برگشت به پنل مدیریت') {
+    adminModeOverride[chat.id] = 'admin';
+    await reply(`⚙️ با موفقیت به پنل مدیریت ارشد بازگشتید.`, adminKeyboard);
+    return;
+  }
+
+  // Check 1: User selection is '🛒 لیست محصولات و خدمات'
+  if (text === '🛒 لیست محصولات و خدمات' || text.toLowerCase() === 'فروشگاه' || text === '/shop') {
+    const activeProducts = products.filter(p => p.active !== false);
+    if (activeProducts.length === 0) {
+      await reply("⚠️ در حال حاضر هیچ محصول فعالی در فروشگاه ثبت نشده است. به زودی محصولات جدید اضافه خواهند شد.", getUserKeyboard(isAdmin));
+      return;
+    }
+
+    let shopMsg = `🛒 **لیست محصولات و خدمات فعال دیجیتال استور** 🛒\n\n`;
+    activeProducts.forEach((p, idx) => {
+      const typeFa = p.type === 'account' ? 'اکانت اشتراکی / اختصاصی' : 'خدمات توسعه و طراحی زنده';
+      shopMsg += `🔹 ${idx + 1}. **${p.title}** (${typeFa})\n`;
+      if (p.desc) shopMsg += `📝 توضیحات: *${p.desc}*\n`;
+      shopMsg += `💰 قیمت: **${p.price}**\n`;
+      shopMsg += `📥 **سفارش آسان**: عدد \`${p.id}\` یا بنویسید: \`سفارش ${p.id}\`\n`;
+      shopMsg += `------------------------------------\n`;
+    });
+    shopMsg += `\n💡 جهت سفارش سریع هر یک از محصولات فوق، کافیست کد شناسه محصول (مثلاً: *${activeProducts[0].id}* یا عدد خالی) را ارسال نمایید.`;
+    
+    await reply(shopMsg, getUserKeyboard(isAdmin));
+    return;
+  }
+
+  // Check 2: User selection is '📦 پیگیری سفارشات من'
+  if (text === '📦 پیگیری سفارشات من' || text === '/orders') {
+    const userOrders = orders.filter(o => o.userIdentifier === userMap.phone);
+    if (userOrders.length === 0) {
+      await reply(
+        `⚠️ خریدار گرامی، شما تاکنون هیچ سفارشی در سیستم ثبت نکرده‌اید.\n\nمی‌توانید همین حالا محصولات فعال را از دکمه "🛒 لیست محصولات و خدمات" مجدداً بازبینی و سفارش دهید.`,
+        getUserKeyboard(isAdmin)
+      );
+      return;
+    }
+
+    let ordersMsg = `📦 **لیست سفارشات و فاکتورهای شما با تلفن ${userMap.phone}**:\n\n`;
+    userOrders.forEach(o => {
+      const statusFa = o.status === 'completed' ? 'تکمیل و تحویل شده ✅' : o.status === 'canceled' ? 'لغو شده ❌' : 'در انتظار اقدام مدیریت ⏳';
+      ordersMsg += `🆔 کد فاکتور: #${o.id}\n`;
+      ordersMsg += `📦 محصول فرعی: **${o.productTitle}**\n`;
+      ordersMsg += `💰 مبلغ فاکتور: ${o.price}\n`;
+      ordersMsg += `📊 وضعیت سفارش: ${statusFa}\n`;
+      ordersMsg += `📅 ثبت شده در: ${new Date(o.createdAt).toLocaleDateString('fa-IR')}\n`;
+      if (o.additionalDetails) {
+        ordersMsg += `📝 جزئیات ارسال شده شما: ${o.additionalDetails}\n`;
+      }
+      ordersMsg += `------------------------------------\n`;
+    });
+
+    await reply(ordersMsg, getUserKeyboard(isAdmin));
+    return;
+  }
+
+  // Check 3: User selection is '🔑 دریافت کد دو مرحله‌ای ورود'
+  if (text === '🔑 دریافت کد دو مرحله‌ای ورود' || text === '/otp') {
+    const tokenOtp = Math.floor(1000 + Math.random() * 9000).toString();
+    otps[userMap.phone] = tokenOtp;
+    await reply(
+      `🔑 **کد تایید دو مرحله‌ای ورود به سایت دیجیتال استور**\n\n` +
+      `کد تایید شما: \`${tokenOtp}\`\n\n` +
+      `این کد تا حداکثر ۲ دقیقه دیگر اعتبار دارد.\nشما می‌توانید این کد را در فیلد ورود با شماره موبایل سایت وارد نمایید.`,
+      getUserKeyboard(isAdmin)
+    );
+    return;
+  }
+
+  // Check 4: User selection is '💬 ارتباط با پشتیبانی'
+  if (text === '💬 ارتباط با پشتیبانی' || text === '/support') {
+    await reply(
+      `💬 **بخش گفتگوی مستقیم با پشتیبانی**\n\n` +
+      `لطفاً در پیام بعدی، سوال، پیشنهاد یا هر پرسشی که دارید را بنویسید.\n` +
+      `پیام شما مستقیماً به تیکت‌های پنل مدیریت فرستاده شده و به محض پاسخ کارشناس، جواب آن را همین‌جا به صورت زنده دریافت خواهید کرد.`,
+      getUserKeyboard(isAdmin)
+    );
+    return;
+  }
+
+  // Check 5: Active Checkout Sequence Confirmation (if already selected a product)
+  if (userCheckoutStates[chat.id]) {
+    const checkoutStateObj = userCheckoutStates[chat.id];
+    
+    if (text === 'لغو' || text === 'انصراف' || text === 'منصرف شدم') {
+      delete userCheckoutStates[chat.id];
+      await reply("❌ روند معامله آنلاین لغو شد. به منوی اصلی بازگشتیم.", getUserKeyboard(isAdmin));
+      return;
+    }
+
+    const prod = products.find(p => p.id === checkoutStateObj.productId && p.active !== false);
+    if (prod) {
+      const newOrder = {
+        id: 1000 + orders.length + 1,
+        productId: prod.id,
+        productTitle: prod.title,
+        productType: prod.type,
+        userIdentifier: userMap.phone,
+        price: prod.price,
+        status: 'pending' as const,
+        createdAt: new Date().toISOString(),
+        additionalDetails: text
+      };
+      orders.push(newOrder);
+      saveDatabase();
+      delete userCheckoutStates[chat.id];
+
+      await reply(
+        `🎉 **سفارش شما با موفقیت ثبت شد!**\n\n` +
+        `🆔 شماره سفارش شما: #${newOrder.id}\n` +
+        `📦 محصول: **${prod.title}**\n` +
+        `💰 مبلغ فاکتور: ${prod.price}\n` +
+        `📝 نیازمندی یا توضیحات ثبت شده: ${text}\n\n` +
+        `⏳ سفارش شما در دست بررسی کارشناسان قرار دارد. هرگونه تغییر در وضعیت سفارش فورا از طریق همین چت برای شما مخابره می‌شود.`,
+        getUserKeyboard(isAdmin)
+      );
+
+      // Notify administrator via bot using separate chat IDs
+      const adminMsg = `🔔 **سفارش جدید از چت بات ${platformName}!**\n\n📦 محصول: ${prod.title}\n👤 خریدار (تلفن): ${userMap.phone}\n💰 مبلغ: ${prod.price}\n📝 جزئیات: ${text}\n\nبه پنل مدیریت وب‌سایت مراجعه کنید.`;
+      
+      if (settings.adminTelegramChatId && settings.telegramToken) {
+        botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', { chat_id: settings.adminTelegramChatId, text: adminMsg });
+      }
+      if (settings.adminBaleChatId && settings.baleToken) {
+        botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', { chat_id: settings.adminBaleChatId, text: adminMsg });
+      }
+      return;
+    }
+  }
+
+  // Check 6: Check if user input is an ID of a product or a text like "سفارش 2"
+  let possibleProductId: number | null = null;
+  const matchNum = text.replace(/[^0-9]/g, '');
+  if (text.startsWith('سفارش') || text.startsWith('خرید') || text.startsWith('ID')) {
+    const matchVal = text.match(/\d+/);
+    if (matchVal) possibleProductId = parseInt(matchVal[0], 10);
+  } else if (/^\d+$/.test(matchNum)) {
+    possibleProductId = parseInt(matchNum, 10);
+  }
+
+  if (possibleProductId) {
+    const prod = products.find(p => p.id === possibleProductId && p.active !== false);
+    if (prod) {
+      userCheckoutStates[chat.id] = { productId: prod.id };
+      await reply(
+        `🛒 **شما درخواست خرید "${prod.title}" را دارید**\n\n` +
+        `💰 مبلغ: *${prod.price}*\n\n` +
+        `📝 لطفاً مشخصات یا اطلاعات تماس تکمیلی خود را در پیام بعدی بفرستید.\n` +
+        `پس از ارسال پیام بعدی، فاکتور شما نهایی گشته و کد سفارش دریافت خواهید کرد.\n\n` +
+        `❌ جهت انصراف کلمه **لغو** را بنویسید.`
+      );
+      return;
+    }
+  }
+
+  // Check 7: Default fallback (General Support Chat Sync)
+  // If user says something else, record as chat sync to admin console!
+  let chatObj = chats.find(c => c.userId === userMap.phone);
+  if (!chatObj) {
+    chatObj = { id: Date.now(), userId: userMap.phone, messages: [] };
+    chats.push(chatObj);
+  }
+  chatObj.messages.push({ sender: 'user', text });
+  saveDatabase();
+
+  await reply(
+    `📩 پیام شما با موفقیت ثبت و به بخش تیکت‌های پشتیبانی فرستاده شد. کارشناسان ما به زودی پاسخ خود را ارسال می‌کنند.`,
+    getUserKeyboard(isAdmin)
+  );
+
+  // Notify admins
+  const adminSyncMsg = `💬 **پیام پشتیبانی جدید از کاربر (${userMap.phone}):**\n\n"${text}"`;
+  if (settings.adminTelegramChatId && settings.telegramToken) {
+    botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', { chat_id: settings.adminTelegramChatId, text: adminSyncMsg });
+  }
+  if (settings.adminBaleChatId && settings.baleToken) {
+    botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', { chat_id: settings.adminBaleChatId, text: adminSyncMsg });
+  }
 }
 
 // Start active background loops
@@ -427,9 +749,17 @@ async function startServer() {
     orders.push(newOrder);
     saveDatabase();
 
-    // Notify administrators via message bots if telegramToken or baleToken is set
-    if (settings.adminIdNumber) {
-      const adminMsg = `🔔 سفارش جدید ثبت شد!\n\n📦 محصول: ${prod.title}\n👥 خریدار: ${userIdentifier}\n💰 مبلغ: ${prod.price}\n📝 جزئیات: ${newOrder.additionalDetails}`;
+    // Notify administrators via separate message bots
+    const adminMsg = `🔔 سفارش جدید ثبت شد!\n\n📦 محصول: ${prod.title}\n👥 خریدار: ${userIdentifier}\n💰 مبلغ: ${prod.price}\n📝 جزئیات: ${newOrder.additionalDetails}`;
+    
+    if (settings.adminTelegramChatId && settings.telegramToken) {
+      botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', { chat_id: settings.adminTelegramChatId, text: adminMsg });
+    }
+    if (settings.adminBaleChatId && settings.baleToken) {
+      botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', { chat_id: settings.adminBaleChatId, text: adminMsg });
+    }
+    // Fallback to legacy adminIdNumber
+    if (settings.adminIdNumber && settings.adminIdNumber !== settings.adminTelegramChatId && settings.adminIdNumber !== settings.adminBaleChatId) {
       if (settings.telegramToken) {
         botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', { chat_id: settings.adminIdNumber, text: adminMsg });
       }
@@ -494,6 +824,22 @@ async function startServer() {
     }
     chat.messages.push({ sender: req.body.sender, text: req.body.text });
     saveDatabase();
+
+    // If admin replies, forward the reply to user's Telegram or Bale bot dynamically!
+    if (req.body.sender === 'admin') {
+      const cleanPhone = req.params.userId.replace(/\D/g, '');
+      const userMap = botUsers.find(u => u.phone === req.params.userId || u.phone === cleanPhone);
+      if (userMap) {
+        const supportReplyMsg = `💬 **پاسخ جدید پشتیبانی از طرف مدیریت:**\n\n"${req.body.text}"`;
+        if (userMap.telegramChatId && settings.telegramToken) {
+          botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', { chat_id: userMap.telegramChatId, text: supportReplyMsg });
+        }
+        if (userMap.baleChatId && settings.baleToken) {
+          botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', { chat_id: userMap.baleChatId, text: supportReplyMsg });
+        }
+      }
+    }
+
     res.json(chat);
   });
 
