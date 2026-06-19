@@ -105,6 +105,7 @@ install_app() {
     fi
     grep -q "^APP_PORT=" .env || echo "APP_PORT=$USER_PORT" >> .env
     grep -q "^PORT=" .env || echo "PORT=$USER_PORT" >> .env
+    grep -q "^NODE_ENV=" .env || echo "NODE_ENV=production" >> .env
     grep -q "^ADMIN_USERNAME=" .env || echo "ADMIN_USERNAME=$ADMIN_USERNAME" >> .env
     grep -q "^ADMIN_PASSWORD=" .env || echo "ADMIN_PASSWORD=$ADMIN_PASSWORD" >> .env
     grep -q "^DOMAIN_NAME=" .env || echo "DOMAIN_NAME=$DOMAIN_NAME" >> .env
@@ -126,7 +127,7 @@ install_app() {
     npm install -g pm2
     APP_PM2_NAME="digital-store-$USER_PORT"
     pm2 delete "$APP_PM2_NAME" &>/dev/null || true
-    PORT=$USER_PORT APP_PORT=$USER_PORT pm2 start dist/server.cjs --name "$APP_PM2_NAME" --cwd "$APP_DIR" --update-env
+    NODE_ENV=production PORT=$USER_PORT APP_PORT=$USER_PORT pm2 start dist/server.cjs --name "$APP_PM2_NAME" --cwd "$APP_DIR" --update-env
     pm2 save
     pm2 startup
     
@@ -333,6 +334,7 @@ update_app() {
     # Update .env file safely
     grep -q "^APP_PORT=" .env && sed -i "s/^APP_PORT=.*/APP_PORT=$USER_PORT/" .env || echo "APP_PORT=$USER_PORT" >> .env
     grep -q "^PORT=" .env && sed -i "s/^PORT=.*/PORT=$USER_PORT/" .env || echo "PORT=$USER_PORT" >> .env
+    grep -q "^NODE_ENV=" .env && sed -i "s/^NODE_ENV=.*/NODE_ENV=production/" .env || echo "NODE_ENV=production" >> .env
     grep -q "^ADMIN_USERNAME=" .env && sed -i "s/^ADMIN_USERNAME=.*/ADMIN_USERNAME=$ADMIN_USERNAME/" .env || echo "ADMIN_USERNAME=$ADMIN_USERNAME" >> .env
     grep -q "^ADMIN_PASSWORD=" .env && sed -i "s/^ADMIN_PASSWORD=.*/ADMIN_PASSWORD=$ADMIN_PASSWORD/" .env || echo "ADMIN_PASSWORD=$ADMIN_PASSWORD" >> .env
     grep -q "^DOMAIN_NAME=" .env && sed -i "s/^DOMAIN_NAME=.*/DOMAIN_NAME=$DOMAIN_NAME/" .env || echo "DOMAIN_NAME=$DOMAIN_NAME" >> .env
@@ -352,7 +354,7 @@ update_app() {
     echo "ری‌استارت سرور..."
     APP_PM2_NAME="digital-store-$USER_PORT"
     pm2 delete "$APP_PM2_NAME" &>/dev/null || true
-    PORT=$USER_PORT APP_PORT=$USER_PORT pm2 start dist/server.cjs --name "$APP_PM2_NAME" --cwd "$APP_DIR" --update-env
+    NODE_ENV=production PORT=$USER_PORT APP_PORT=$USER_PORT pm2 start dist/server.cjs --name "$APP_PM2_NAME" --cwd "$APP_DIR" --update-env
     pm2 save
     
     # PM2 Startup Diagnostics Checking

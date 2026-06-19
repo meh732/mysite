@@ -655,14 +655,10 @@ async function startServer() {
                  argvPath.includes('dist') || 
                  argvPath.endsWith('.cjs') || 
                  (typeof __filename !== 'undefined' && (__filename.includes('dist') || __filename.endsWith('.cjs'))) ||
-                 !fs.existsSync(path.join(process.cwd(), 'server.ts'));
+                 !fs.existsSync(path.join(process.cwd(), 'server.ts')) ||
+                 fs.existsSync(path.join(process.cwd(), 'dist/index.html'));
   
-  let PORT = 3000;
-  if (isProd) {
-    PORT = Number(process.env.APP_PORT || process.env.PORT || 3000);
-  } else {
-    PORT = 3000;
-  }
+  const PORT = Number(process.env.APP_PORT || process.env.PORT || 3000);
 
   app.use(express.json());
 
