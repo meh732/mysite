@@ -33,7 +33,7 @@ const otps: Record<string, string> = {};
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = parseInt(process.env.APP_PORT || process.env.PORT || '3000', 10);
 
   app.use(express.json());
 
@@ -184,7 +184,9 @@ async function startServer() {
   // --- API Routes: Admin Auth ---
   app.post('/api/admin/auth', (req, res) => {
     const { username, password } = req.body;
-    if (username === 'admin' && password === '1234') {
+    const adminUser = process.env.ADMIN_USERNAME || 'admin';
+    const adminPass = process.env.ADMIN_PASSWORD || '1234';
+    if (username === adminUser && password === adminPass) {
       res.json({ success: true, token: 'fake-jwt-token', role: 'main_admin' });
     } else {
       res.status(401).json({ success: false, message: 'اطلاعات نادرست است' });

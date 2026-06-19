@@ -31,6 +31,24 @@ install_app() {
         return
     fi
     
+    echo "=========================================="
+    echo "تنظیمات اولیه"
+    echo "=========================================="
+    read -p "انتخاب پورت (پیشفرض: 3000): " USER_PORT
+    USER_PORT=${USER_PORT:-3000}
+    
+    read -p "شناسه کاربری ادمین (پیشفرض: admin): " ADMIN_USERNAME
+    ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+    
+    read -s -p "رمز عبور ادمین (پیشفرض: 1234): " ADMIN_PASSWORD
+    echo ""
+    ADMIN_PASSWORD=${ADMIN_PASSWORD:-1234}
+    
+    read -p "آیا دامنه ای برای اتصال دارید؟ (در صورت نداشتن اینتر بزنید تا رد شود): " DOMAIN_NAME
+    if [ ! -z "$DOMAIN_NAME" ]; then
+        read -p "آیا میخواهید SSL (رایگان Certbot) نصب شود؟ (y/N) " INSTALL_SSL
+    fi
+    
     echo "در حال آپدیت سیستم و نصب پیش‌نیازها..."
     apt-get update -y
     apt-get install -y curl git ufw
@@ -48,8 +66,12 @@ install_app() {
 
     if [ ! -f .env ]; then
         cp .env.example .env
-        echo ".env file created. لطفا توکن‌ها را در آن وارد کنید."
     fi
+    grep -q "^APP_PORT=" .env || echo "APP_PORT=$USER_PORT" >> .env
+    grep -q "^PORT=" .env || echo "PORT=$USER_PORT" >> .env
+    grep -q "^ADMIN_USERNAME=" .env || echo "ADMIN_USERNAME=$ADMIN_USERNAME" >> .env
+    grep -q "^ADMIN_PASSWORD=" .env || echo "ADMIN_PASSWORD=$ADMIN_PASSWORD" >> .env
+    echo ".env file created and configured."
 
     echo "ساخت نسخه پروداکشن..."
     npm run build
@@ -61,12 +83,56 @@ install_app() {
     pm2 startup
     
     echo "کانفیگ فایروال (Optional)..."
-    ufw allow 3000
+    ufw allow $USER_PORT
+
+    if [ ! -z "$DOMAIN_NAME" ]; then
+        echo "در حال تنظیمات Nginx (وب‌سرور)..."
+        apt-get install -y nginx
+        cat <<EOF > /etc/nginx/sites-available/$DOMAIN_NAME
+server {
+    listen 80;
+    server_name $DOMAIN_NAME;
+
+    location / {
+        proxy_pass http://localhost:$USER_PORT;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_cache_bypass \$http_upgrade;
+    }
+}
+EOF
+        ln -sf /etc/nginx/sites-available/$DOMAIN_NAME /etc/nginx/sites-enabled/
+        systemctl restart nginx
+        ufw allow 'Nginx Full'
+
+        if [[ "$INSTALL_SSL" =~ ^[Yy]$ ]]; then
+            echo "در حال نصب گواهی SSL..."
+            apt-get install -y certbot python3-certbot-nginx
+            certbot --nginx -d $DOMAIN_NAME --non-interactive --agree-tos -m admin@$DOMAIN_NAME || echo "خطا در نصب SSL. مطمئن شوید دامنه به این سرور متصل است."
+        fi
+    fi
+
+    SERVER_IP=$(curl -s ifconfig.me || hostname -I | awk '{print $1}')
+    
+    if [ ! -z "$DOMAIN_NAME" ] && [[ "$INSTALL_SSL" =~ ^[Yy]$ ]]; then
+        BASE_URL="https://$DOMAIN_NAME"
+    elif [ ! -z "$DOMAIN_NAME" ]; then
+        BASE_URL="http://$DOMAIN_NAME"
+    else
+        BASE_URL="http://$SERVER_IP:$USER_PORT"
+    fi
 
     echo "=========================================="
     echo "نصب با موفقیت انجام شد!"
-    echo "سایت شما روی پورت 3000 در دسترس است."
-    echo "جهت امنیت، پیشنهاد میشود یک Reverse Proxy مثل Nginx با SSL نصب کنید."
+    echo "آدرس سایت شما:"
+    echo "$BASE_URL"
+    echo ""
+    echo "آدرس پنل مدیریت:"
+    echo "$BASE_URL/admin"
+    echo "یوزرنیم: $ADMIN_USERNAME"
+    echo "رمزعبور: $ADMIN_PASSWORD"
     echo "=========================================="
     read -p "Press enter to return..."
 }
