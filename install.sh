@@ -71,6 +71,8 @@ install_app() {
     grep -q "^PORT=" .env || echo "PORT=$USER_PORT" >> .env
     grep -q "^ADMIN_USERNAME=" .env || echo "ADMIN_USERNAME=$ADMIN_USERNAME" >> .env
     grep -q "^ADMIN_PASSWORD=" .env || echo "ADMIN_PASSWORD=$ADMIN_PASSWORD" >> .env
+    grep -q "^DOMAIN_NAME=" .env || echo "DOMAIN_NAME=$DOMAIN_NAME" >> .env
+    grep -q "^INSTALL_SSL=" .env || echo "INSTALL_SSL=$INSTALL_SSL" >> .env
     echo ".env file created and configured."
 
     echo "ساخت نسخه پروداکشن..."
@@ -141,42 +143,42 @@ EOF
 update_app() {
     if [ ! -d "$APP_DIR" ]; then
         echo "پروژه‌ای برای بروزرسانی یافت نشد!"
-        read -p "Press enter to return..."
+        read -p "Press enter to return..." < /dev/tty
         return
     fi
     
     echo "=========================================="
     echo "بروزرسانی و تنظیمات مجدد"
     echo "=========================================="
+    
     # Load existing env if available
-    local CURRENT_PORT=3000
-    local CURRENT_ADMIN="admin"
-    local CURRENT_PASS="1234"
+    local USER_PORT=3000
+    local ADMIN_USERNAME="admin"
+    local ADMIN_PASSWORD="1234"
+    local DOMAIN_NAME=""
+    local INSTALL_SSL="n"
+    
     if [ -f "$APP_DIR/.env" ]; then
-        CURRENT_PORT=$(grep "APP_PORT=" "$APP_DIR/.env" | cut -d '=' -f2) || true
-        CURRENT_ADMIN=$(grep "ADMIN_USERNAME=" "$APP_DIR/.env" | cut -d '=' -f2) || true
-        CURRENT_PASS=$(grep "ADMIN_PASSWORD=" "$APP_DIR/.env" | cut -d '=' -f2) || true
+        USER_PORT=$(grep "^APP_PORT=" "$APP_DIR/.env" | cut -d '=' -f2) || USER_PORT=$(grep "^PORT=" "$APP_DIR/.env" | cut -d '=' -f2) || true
+        ADMIN_USERNAME=$(grep "^ADMIN_USERNAME=" "$APP_DIR/.env" | cut -d '=' -f2) || true
+        ADMIN_PASSWORD=$(grep "^ADMIN_PASSWORD=" "$APP_DIR/.env" | cut -d '=' -f2) || true
+        DOMAIN_NAME=$(grep "^DOMAIN_NAME=" "$APP_DIR/.env" | cut -d '=' -f2) || true
+        INSTALL_SSL=$(grep "^INSTALL_SSL=" "$APP_DIR/.env" | cut -d '=' -f2) || true
     fi
-    CURRENT_PORT=${CURRENT_PORT:-3000}
-    CURRENT_ADMIN=${CURRENT_ADMIN:-admin}
-    CURRENT_PASS=${CURRENT_PASS:-1234}
     
-    read -p "انتخاب پورت (پیشفرض: $CURRENT_PORT): " USER_PORT < /dev/tty
-    USER_PORT=${USER_PORT:-$CURRENT_PORT}
+    USER_PORT=${USER_PORT:-3000}
+    ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+    ADMIN_PASSWORD=${ADMIN_PASSWORD:-1234}
     
-    read -p "شناسه کاربری ادمین (پیشفرض: $CURRENT_ADMIN): " ADMIN_USERNAME < /dev/tty
-    ADMIN_USERNAME=${ADMIN_USERNAME:-$CURRENT_ADMIN}
-    
-    read -s -p "رمز عبور ادمین (در صورت خالی گذاشتن تغییر نمیکند): " ADMIN_PASSWORD < /dev/tty
-    echo ""
-    ADMIN_PASSWORD=${ADMIN_PASSWORD:-$CURRENT_PASS}
-    
-    read -p "آیا دامنه ای برای اتصال دارید؟ (در صورت نداشتن اینتر بزنید تا رد شود): " DOMAIN_NAME < /dev/tty
+    echo "تنظیمات شناسایی شده قبلی:"
+    echo "- پورت: $USER_PORT"
+    echo "- یوزرنیم ادمین: $ADMIN_USERNAME"
     if [ ! -z "$DOMAIN_NAME" ]; then
-        read -p "آیا میخواهید SSL (رایگان Certbot) نصب/بروز رسانی شود؟ (y/N) " INSTALL_SSL < /dev/tty
+        echo "- دامنه متصل: $DOMAIN_NAME (SSL: $INSTALL_SSL)"
     fi
+    echo ""
+    echo "در حال دریافت آخرین تغییرات و به روز رسانی مخزن..."
     
-    echo "در حال دریافت آخرین تغییرات..."
     cd $APP_DIR
     git reset --hard
     git pull origin main
@@ -193,6 +195,8 @@ update_app() {
     grep -q "^PORT=" .env && sed -i "s/^PORT=.*/PORT=$USER_PORT/" .env || echo "PORT=$USER_PORT" >> .env
     grep -q "^ADMIN_USERNAME=" .env && sed -i "s/^ADMIN_USERNAME=.*/ADMIN_USERNAME=$ADMIN_USERNAME/" .env || echo "ADMIN_USERNAME=$ADMIN_USERNAME" >> .env
     grep -q "^ADMIN_PASSWORD=" .env && sed -i "s/^ADMIN_PASSWORD=.*/ADMIN_PASSWORD=$ADMIN_PASSWORD/" .env || echo "ADMIN_PASSWORD=$ADMIN_PASSWORD" >> .env
+    grep -q "^DOMAIN_NAME=" .env && sed -i "s/^DOMAIN_NAME=.*/DOMAIN_NAME=$DOMAIN_NAME/" .env || echo "DOMAIN_NAME=$DOMAIN_NAME" >> .env
+    grep -q "^INSTALL_SSL=" .env && sed -i "s/^INSTALL_SSL=.*/INSTALL_SSL=$INSTALL_SSL/" .env || echo "INSTALL_SSL=$INSTALL_SSL" >> .env
 
     echo "بیلد مجدد..."
     npm run build
@@ -205,7 +209,7 @@ update_app() {
     ufw allow $USER_PORT
 
     if [ ! -z "$DOMAIN_NAME" ]; then
-        echo "در حال تنظیمات Nginx (وب‌سرور)..."
+        echo "در حال تنظیم مجدد و اعمال وب‌سرور Nginx..."
         apt-get install -y nginx
         cat <<EOF > /etc/nginx/sites-available/$DOMAIN_NAME
 server {
@@ -229,11 +233,12 @@ EOF
         if [[ "$INSTALL_SSL" =~ ^[Yy]$ ]]; then
             echo "در حال نصب/بروزرسانی گواهی SSL..."
             apt-get install -y certbot python3-certbot-nginx
-            certbot --nginx -d $DOMAIN_NAME --non-interactive --agree-tos -m admin@$DOMAIN_NAME || echo "خطا در نصب SSL. مطمئن شوید دامنه به این سرور متصل است."
+            certbot --nginx -d $DOMAIN_NAME --non-interactive --agree-tos -m admin@$DOMAIN_NAME || echo "خطا در نصب SSL."
         fi
     fi
 
-    SERVER_IP=$(curl -s ifconfig.me || hostname -I | awk '{print $1}')
+    SERVER_IP=$(curl -s --max-time 3 ifconfig.me || hostname -I | awk '{print $1}')
+    SERVER_IP=$(echo "$SERVER_IP" | xargs)
     
     if [ ! -z "$DOMAIN_NAME" ] && [[ "$INSTALL_SSL" =~ ^[Yy]$ ]]; then
         BASE_URL="https://$DOMAIN_NAME"
@@ -253,7 +258,7 @@ EOF
     echo "یوزرنیم: $ADMIN_USERNAME"
     echo "رمزعبور: $ADMIN_PASSWORD"
     echo "=========================================="
-    read -p "Press enter to return..."
+    read -p "Press enter to return..." < /dev/tty
 }
 
 uninstall_app() {
