@@ -573,7 +573,7 @@ initBaleBot();
 // --- Main Server Function ---
 async function startServer() {
   const app = express();
-  const PORT = 3000; // Fixed as required by environmental constraints
+  const PORT = Number(process.env.PORT || process.env.APP_PORT || 3000);
 
   app.use(express.json());
 
