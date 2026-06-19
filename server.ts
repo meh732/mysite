@@ -3,6 +3,7 @@ import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import nodemailer from 'nodemailer';
+import TelegramBot from 'node-telegram-bot-api';
 
 // --- Mock Database ---
 let products = [
@@ -19,9 +20,10 @@ let chats = [
   { id: 1, userId: 'user@example.com', messages: [{ sender: 'user', text: 'سلام، برای ربات تلگرام نیاز به مشاوره دارم.' }, { sender: 'admin', text: 'سلام! در خدمتیم. چه امکانی مد نظرتون هست؟' }] }
 ];
 let settings = {
-  telegramToken: '',
+  telegramToken: process.env.TELEGRAM_BOT_TOKEN || '',
   baleToken: '',
-  adminIdNumber: '',
+  adminIdNumber: process.env.MAIN_ADMIN_ID || '',
+  subAdminIds: '', // comma separated
   smtpHost: '',
   smtpPort: '',
   smtpUser: '',
@@ -31,6 +33,107 @@ let settings = {
 
 // Temp store for OTPs
 const otps: Record<string, string> = {};
+
+// Telegram Bot Init
+let bot: TelegramBot | null = null;
+
+function isAdmin(chatId: number | string): boolean {
+  const mainId = settings.adminIdNumber.trim();
+  const subIds = settings.subAdminIds.split(',').map(s => s.trim()).filter(Boolean);
+  const chatIdStr = String(chatId);
+  return chatIdStr === mainId || subIds.includes(chatIdStr);
+}
+
+function initTelegramBot() {
+  if (bot) {
+    bot.stopPolling();
+    bot = null;
+  }
+  
+  if (settings.telegramToken) {
+    bot = new TelegramBot(settings.telegramToken, { polling: true });
+    
+    bot.onText(/\/start/, (msg) => {
+      const chatId = msg.chat.id;
+      const adminRole = isAdmin(chatId) ? "شما ادمین هستید.\n" : "";
+      
+      const opts = {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🛒 محصولات و سرویس‌ها', callback_data: 'products' }],
+            [{ text: '📦 پیگیری سفارشات', callback_data: 'orders' }],
+            [{ text: '💬 پشتیبانی فنی', callback_data: 'support' }],
+            isAdmin(chatId) ? [{ text: 'مدیریت سریع ربات', callback_data: 'admin_panel' }] : []
+          ]
+        }
+      };
+      
+      bot!.sendMessage(chatId, `سلام! به ربات فروشگاهی خوش آمدید.\n${adminRole}لطفا از منوی شیشه‌ای زیر یکی از گزینه‌ها را انتخاب کنید:`, opts);
+    });
+
+    bot.on('callback_query', (query) => {
+      const chatId = query.message?.chat.id;
+      if (!chatId) return;
+
+      const data = query.data;
+
+      if (data === 'products') {
+        const keyboard = products.map(p => ([{ text: `${p.title} - ${p.price}`, callback_data: `buy_${p.id}` }]));
+        keyboard.push([{ text: '🔙 بازگشت به منوی اصلی', callback_data: 'main_menu' }]);
+        bot!.sendMessage(chatId, 'لطفا محصول مورد نظر خود را انتخاب کنید:', { reply_markup: { inline_keyboard: keyboard } });
+      }
+
+      if (data && data.startsWith('buy_')) {
+        const pId = data.split('_')[1];
+        const p = products.find(x => String(x.id) === pId);
+        if (p) {
+          bot!.sendMessage(chatId, `محصول: *${p.title}*\nتوضیحات: ${p.desc}\nقیمت: ${p.price}\n\nجهت خرید لطفاً از طریق سایت اقدام کنید یا به پشتیبانی پیام دهید.`, {
+             parse_mode: 'Markdown',
+             reply_markup: {
+                inline_keyboard: [
+                   [{ text: '🌐 ورود به سایت', url: 'http://localhost/' }],
+                   [{ text: '🔙 بازگشت', callback_data: 'products' }]
+                ]
+             }
+          });
+        }
+      }
+
+      if (data === 'main_menu') {
+        const opts = {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '🛒 محصولات و سرویس‌ها', callback_data: 'products' }],
+              [{ text: '📦 پیگیری سفارشات', callback_data: 'orders' }],
+              [{ text: '💬 پشتیبانی فنی', callback_data: 'support' }],
+              isAdmin(chatId) ? [{ text: 'مدیریت سریع (ادمین)', callback_data: 'admin_panel' }] : []
+            ]
+          }
+        };
+        bot!.sendMessage(chatId, 'به منوی اصلی بازگشتید:', opts);
+      }
+      
+      if (data === 'admin_panel' && isAdmin(chatId)) {
+        bot!.sendMessage(chatId, 'تنظیمات ادمین:\n\nبرای مدیریت کامل و حرفه‌ای محصولات و تنظیمات به پنل ادمین وب‌سایت مراجعه کنید.', {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '🌐 رفتن به پنل وب سایت', url: 'http://localhost/admin' }],
+              [{ text: '🔙 منوی اصلی', callback_data: 'main_menu' }]
+            ]
+          }
+        });
+      }
+      
+      // Answer callback query
+      bot!.answerCallbackQuery(query.id);
+    });
+    
+    console.log('[BOT] Telegram Bot polling started.');
+  }
+}
+
+// Initialise Bot upon booting
+initTelegramBot();
 
 async function startServer() {
   const app = express();
@@ -163,6 +266,7 @@ async function startServer() {
   });
   app.post('/api/admin/settings', (req, res) => {
     settings = { ...settings, ...req.body };
+    initTelegramBot();
     res.json({ success: true, settings });
   });
   app.get('/api/admin/backup', (req, res) => {
