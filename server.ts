@@ -408,6 +408,15 @@ function initTelegramBot() {
   if (settings.telegramToken) {
     try {
       telegramBot = new TelegramBot(settings.telegramToken, { polling: true });
+      
+      // Silence and log polling and general errors so censored networks (like Iran) do not crash the express server process
+      telegramBot.on('polling_error', (error: any) => {
+        console.warn(`[BOT-WARNING] Telegram polling error (commonly due to server network limitations or censorship):`, error.message || error);
+      });
+      telegramBot.on('error', (error: any) => {
+        console.error(`[BOT-ERROR] Telegram general error:`, error.message || error);
+      });
+
       console.log(`[BOT] Telegram Bot initialized successfully.`);
       
       telegramBot.onText(/\/start/, (msg) => {

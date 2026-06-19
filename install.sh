@@ -89,9 +89,17 @@ install_app() {
     curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | sudo -E bash -
     apt-get install -y nodejs
     
-    echo "کلون کردن پروژه..."
-    git clone $REPO_URL $APP_DIR
-    cd $APP_DIR
+    if [ -f "package.json" ] || [ -f "server.ts" ]; then
+        echo "✅ فایل‌های پروژه در لوکال شناسایی شدند. در حال کپی کردن توسعه‌های محلی به مسیر $APP_DIR..."
+        mkdir -p "$APP_DIR"
+        cp -r ./* "$APP_DIR/" || true
+        cp -r ./.env* "$APP_DIR/" 2>/dev/null || true
+        cd "$APP_DIR"
+    else
+        echo "کلون کردن پروژه از ریپازیتوری لایو گیت‌هاب..."
+        git clone $REPO_URL $APP_DIR
+        cd "$APP_DIR"
+    fi
 
     # Ensure correct ownership/permissions
     echo "تنظیم دسترسی‌های دایرکتوری پروژه..."
@@ -163,6 +171,17 @@ install_app() {
     if [ ! -z "$DOMAIN_NAME" ]; then
         ufw allow 80/tcp || true
         ufw allow 443/tcp || true
+    fi
+
+    # support firewalld (CentOS / AlmaLinux / RockyLinux)
+    if command -v firewall-cmd &>/dev/null; then
+        echo "تنظیم قوانین فایروال firewalld..."
+        firewall-cmd --zone=public --add-port=$USER_PORT/tcp --permanent &>/dev/null || true
+        if [ ! -z "$DOMAIN_NAME" ]; then
+            firewall-cmd --zone=public --add-service=http --permanent &>/dev/null || true
+            firewall-cmd --zone=public --add-service=https --permanent &>/dev/null || true
+        fi
+        firewall-cmd --reload &>/dev/null || true
     fi
 
     # Oracle Cloud and general iptables fix
@@ -389,6 +408,17 @@ update_app() {
     if [ ! -z "$DOMAIN_NAME" ]; then
         ufw allow 80/tcp || true
         ufw allow 443/tcp || true
+    fi
+
+    # support firewalld (CentOS / AlmaLinux / RockyLinux)
+    if command -v firewall-cmd &>/dev/null; then
+        echo "تنظیم قوانین فایروال firewalld..."
+        firewall-cmd --zone=public --add-port=$USER_PORT/tcp --permanent &>/dev/null || true
+        if [ ! -z "$DOMAIN_NAME" ]; then
+            firewall-cmd --zone=public --add-service=http --permanent &>/dev/null || true
+            firewall-cmd --zone=public --add-service=https --permanent &>/dev/null || true
+        fi
+        firewall-cmd --reload &>/dev/null || true
     fi
 
     # Oracle Cloud and general iptables fix
