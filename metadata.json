@@ -1,0 +1,6 @@
+{
+  "name": "فروشگاه اکانت و خدمات دیجیتال",
+  "description": "فروشگاه مدرن برای خرید اپل آیدی، اکانت‌های هوش مصنوعی و سفارش طراحی سایت، ربات و اپلیکیشن",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
