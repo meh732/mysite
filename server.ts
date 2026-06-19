@@ -11,6 +11,13 @@ import os from 'os';
 // --- IP & Base URL auto-detection ---
 let detectedServerIP = '127.0.0.1';
 
+function isValidIP(ip: string): boolean {
+  if (!ip) return false;
+  const ipv4Regex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+  const ipv6Regex = /^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))$/;
+  return ipv4Regex.test(ip) || ipv6Regex.test(ip);
+}
+
 async function autoDetectPublicIP() {
   try {
     const controller = new AbortController();
@@ -19,7 +26,7 @@ async function autoDetectPublicIP() {
     clearTimeout(id);
     if (res.ok) {
        const ip = (await res.text()).trim();
-       if (ip) {
+       if (ip && isValidIP(ip)) {
          detectedServerIP = ip;
          return ip;
        }
@@ -35,7 +42,7 @@ async function autoDetectPublicIP() {
     clearTimeout(id);
     if (res.ok) {
        const ip = (await res.text()).trim();
-       if (ip) {
+       if (ip && isValidIP(ip)) {
          detectedServerIP = ip;
          return ip;
        }
