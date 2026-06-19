@@ -19,36 +19,29 @@ function isValidIP(ip: string): boolean {
 }
 
 async function autoDetectPublicIP() {
-  try {
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), 1500);
-    const res = await fetch('https://api.ipify.org', { signal: controller.signal });
-    clearTimeout(id);
-    if (res.ok) {
-       const ip = (await res.text()).trim();
-       if (ip && isValidIP(ip)) {
-         detectedServerIP = ip;
-         return ip;
-       }
-    }
-  } catch (e) {
-    // ignore
-  }
+  const providers = [
+    'https://api.ipify.org',
+    'https://ifconfig.me/ip',
+    'https://icanhazip.com',
+    'https://ipinfo.io/ip'
+  ];
 
-  try {
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), 1500);
-    const res = await fetch('https://ifconfig.me/ip', { signal: controller.signal });
-    clearTimeout(id);
-    if (res.ok) {
-       const ip = (await res.text()).trim();
-       if (ip && isValidIP(ip)) {
-         detectedServerIP = ip;
-         return ip;
-       }
+  for (const url of providers) {
+    try {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), 1500);
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(id);
+      if (res.ok) {
+         const ip = (await res.text()).trim();
+         if (ip && isValidIP(ip)) {
+           detectedServerIP = ip;
+           return ip;
+         }
+      }
+    } catch (e) {
+      // ignore and try next
     }
-  } catch (e) {
-    // ignore
   }
 
   try {

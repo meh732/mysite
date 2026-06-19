@@ -34,8 +34,10 @@ detect_public_ip() {
     for provider in "${IP_PROVIDERS[@]}"; do
         local clean_ip=""
         clean_ip=$(curl -s --max-time 3 "$provider" | tr -d '[:space:]' || true)
-        if [[ ! -z "$clean_ip" && ! "$clean_ip" =~ "<" && ! "$clean_ip" =~ "Forbidden" && ! "$clean_ip" =~ "403" ]]; then
-            if [[ "$clean_ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ || "$clean_ip" =~ : ]]; then
+        # Ensure it has something and only contains valid IP characters (0-9, a-f, dots, colons)
+        if [[ ! -z "$clean_ip" && "$clean_ip" =~ ^[0-9a-fA-F\.:]+$ ]]; then
+            # Must contain at least two dots (for IPv4) or two colons (for IPv6)
+            if [[ "$clean_ip" =~ \..*\. || "$clean_ip" =~ :.*: ]]; then
                 IP_TEMP="$clean_ip"
                 break
             fi
@@ -46,8 +48,8 @@ detect_public_ip() {
         IP_TEMP=$(hostname -I | awk '{print $1}' | tr -d '[:space:]' || true)
     fi
     
-    # Final check if IP_TEMP is empty or contains garbage
-    if [[ -z "$IP_TEMP" || "$IP_TEMP" =~ "<" || "$IP_TEMP" =~ "Forbidden" || "$IP_TEMP" =~ "403" ]]; then
+    # Final check if IP_TEMP is empty or contains garbage (non-IP chars)
+    if [[ -z "$IP_TEMP" || ! "$IP_TEMP" =~ ^[0-9a-fA-F\.:]+$ || ! ( "$IP_TEMP" =~ \..*\. || "$IP_TEMP" =~ :.*: ) ]]; then
         IP_TEMP="127.0.0.1"
     fi
     echo "$IP_TEMP"
