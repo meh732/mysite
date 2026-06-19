@@ -10,7 +10,7 @@ export default function Admin() {
   const navigate = useNavigate();
 
   // Settings & DB State
-  const [adminSettings, setAdminSettings] = useState({ telegramToken: '', baleToken: '', adminIdNumber: '', subAdminIds: '', smtpHost: '', smtpPort: '', smtpUser: '', smtpPass: '', enableMobileLogin: true });
+  const [adminSettings, setAdminSettings] = useState({ telegramToken: '', baleToken: '', adminIdNumber: '', smtpHost: '', smtpPort: '', smtpUser: '', smtpPass: '', enableMobileLogin: true });
   const [products, setProducts] = useState<Product[]>([]);
   
   // Login State
@@ -119,10 +119,9 @@ export default function Admin() {
 
   const tabs = [
     { id: 'dashboard', label: 'داشبورد', icon: <LayoutDashboard className="w-5 h-5" /> },
-    { id: 'orders', label: 'مدیریت سفارشات', icon: <ShoppingBag className="w-5 h-5" /> },
-    { id: 'products', label: 'مدیریت محصولات و قیمت‌ها', icon: <Settings className="w-5 h-5" /> },
+    { id: 'orders', label: 'سفارشات/محصولات', icon: <ShoppingBag className="w-5 h-5" /> },
     { id: 'chats', label: 'پشتیبانی/پیام‌ها', icon: <MessageSquare className="w-5 h-5" /> },
-    { id: 'settings', label: 'تنظیمات پایه و ربات', icon: <Bot className="w-5 h-5" /> },
+    { id: 'settings', label: 'تنظیمات پایه و ربات', icon: <Settings className="w-5 h-5" /> },
     { id: 'backup', label: 'بکاپ سیستم', icon: <Database className="w-5 h-5" /> },
   ];
 
@@ -231,18 +230,6 @@ export default function Admin() {
                      placeholder="e.g. 123456789"
                    />
                 </div>
-
-                <div>
-                   <label className="text-sm font-medium text-zinc-300 block mb-2">شناسه ادمین‌های فرعی (با کاما جدا کنید)</label>
-                   <input 
-                     type="text" 
-                     value={adminSettings.subAdminIds || ''} 
-                     onChange={e => setAdminSettings({...adminSettings, subAdminIds: e.target.value})}
-                     className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-white outline-none focus:border-indigo-500 transition-colors" 
-                     dir="ltr" 
-                     placeholder="e.g. 987654321, 11223344"
-                   />
-                </div>
                 
                 <div className="flex items-center gap-4 py-2">
                   <label className="text-sm font-medium text-zinc-300">فعال بودن ورود با شماره موبایل (پیام‌رسان)</label>
@@ -257,15 +244,6 @@ export default function Admin() {
 
              <div className="glass-panel p-6">
                <h3 className="font-bold text-lg mb-4">تنظیمات ایمیل (جهت ارسال کد یکبار مصرف)</h3>
-               
-               <div className="bg-blue-500/10 border border-blue-500/20 text-blue-400 p-4 rounded-xl text-sm mb-6 leading-relaxed">
-                 <strong>راهنمای تنظیم جیمیل (Gmail):</strong><br />
-                 ۱. <strong>SMTP Host:</strong> <code>smtp.gmail.com</code> | <strong>SMTP Port:</strong> <code>587</code> یا <code>465</code><br />
-                 ۲. <strong>SMTP User:</strong> آدرس جیمیل شما (مثلا example@gmail.com)<br />
-                 ۳. <strong>SMTP Password:</strong> باید از گوگل یک <strong>App Password (رمز عبور برنامه)</strong> بگیرید. رمز اصلی جیمیل کار نمی‌کند.<br />
-                 <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="underline mt-1 inline-block">لینک ساخت App Password در گوگل</a>
-               </div>
-
                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                  <div>
                    <label className="text-sm font-medium text-zinc-300 block mb-2">SMTP Host</label>
@@ -399,44 +377,8 @@ export default function Admin() {
            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 max-w-6xl mx-auto">
              <header className="mb-8 flex justify-between items-end">
                <div>
-                  <h1 className="text-3xl font-bold tracking-tight">مدیریت سفارشات</h1>
-                  <p className="text-zinc-400 text-sm mt-2">بررسی و تایید سفارشات ثبت شده توسط کاربران در سایت و ربات</p>
-               </div>
-             </header>
-
-             <div className="glass-panel overflow-hidden">
-               <table className="w-full text-sm text-left rtl:text-right text-zinc-400">
-                 <thead className="text-xs text-zinc-300 uppercase bg-zinc-900/50">
-                   <tr>
-                     <th className="px-6 py-4">شناسه سفارش</th>
-                     <th className="px-6 py-4">کاربر</th>
-                     <th className="px-6 py-4">مبلغ پرداختی</th>
-                     <th className="px-6 py-4">وضعیت</th>
-                     <th className="px-6 py-4">عملیات</th>
-                   </tr>
-                 </thead>
-                 <tbody>
-                    <tr className="border-b border-zinc-800/50 hover:bg-zinc-900/30">
-                       <td className="px-6 py-4 font-medium text-zinc-200">#1024</td>
-                       <td className="px-6 py-4">کاربر سایت</td>
-                       <td className="px-6 py-4 text-emerald-400">300,000 تومان</td>
-                       <td className="px-6 py-4"><span className="text-xs text-orange-400 bg-orange-400/10 px-2 py-1 rounded-full">در انتظار تایید</span></td>
-                       <td className="px-6 py-4 flex gap-2">
-                         <button className="text-emerald-400 hover:text-emerald-300">تحویل سفارش</button>
-                       </td>
-                    </tr>
-                 </tbody>
-               </table>
-             </div>
-           </motion.div>
-        )}
-
-        {activeTab === 'products' && (
-           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 max-w-6xl mx-auto">
-             <header className="mb-8 flex justify-between items-end">
-               <div>
-                  <h1 className="text-3xl font-bold tracking-tight">مدیریت محصولات و قیمت‌ها</h1>
-                  <p className="text-zinc-400 text-sm mt-2">افزودن، ویرایش و مدیریت تمامی محصولات برای سایت و ربات شیشه‌ای</p>
+                  <h1 className="text-3xl font-bold tracking-tight">مدیریت محصولات</h1>
+                  <p className="text-zinc-400 text-sm mt-2">افزودن و ویرایش قیمت و توضیحات محصولات و اکانت‌ها</p>
                </div>
                <button className="bg-indigo-500 hover:bg-indigo-600 px-4 py-2 rounded-xl text-sm font-medium">
                  محصول جدید +
