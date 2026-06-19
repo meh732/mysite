@@ -115,18 +115,18 @@ install_app() {
     echo "ساخت نسخه پروداکشن..."
     npm run build
 
-    # Stop Apache if it is running and blocking port 80
-    if systemctl is-active --quiet apache2 || which apache2 &>/dev/null; then
-        echo "توقف وب‌سرور Apache جهت جلوگیری از تداخل با Nginx..."
-        systemctl stop apache2 &>/dev/null || true
-        systemctl disable apache2 &>/dev/null || true
+    # Ensure Apache is running and active so we do not disrupt other user sites on ports 80/443
+    if which apache2 &>/dev/null; then
+        echo "تضمین فعال بودن وب‌سرور اصلی Apache جهت جلوگیری از تداخل با سایر سایت‌های روی پورت ۸۰/۴۴۳..."
+        systemctl start apache2 &>/dev/null || true
+        systemctl enable apache2 &>/dev/null || true
     fi
 
     echo "نصب PM2 و اجرای سرور..."
     npm install -g pm2
     APP_PM2_NAME="digital-store-$USER_PORT"
     pm2 delete "$APP_PM2_NAME" &>/dev/null || true
-    pm2 start dist/server.cjs --name "$APP_PM2_NAME" --cwd "$APP_DIR"
+    PORT=$USER_PORT APP_PORT=$USER_PORT pm2 start dist/server.cjs --name "$APP_PM2_NAME" --cwd "$APP_DIR" --update-env
     pm2 save
     pm2 startup
     
@@ -159,15 +159,19 @@ install_app() {
 
     echo "کانفیگ فایروال..."
     ufw allow $USER_PORT || true
-    ufw allow 80/tcp || true
-    ufw allow 443/tcp || true
+    if [ ! -z "$DOMAIN_NAME" ]; then
+        ufw allow 80/tcp || true
+        ufw allow 443/tcp || true
+    fi
 
     # Oracle Cloud and general iptables fix
     if command -v iptables &>/dev/null; then
         echo "تنظیم قوانین فایروال iptables جهت بازگشایی پورت‌ها..."
-        iptables -I INPUT 1 -p tcp --dport 80 -j ACCEPT || true
-        iptables -I INPUT 1 -p tcp --dport 443 -j ACCEPT || true
         iptables -I INPUT 1 -p tcp --dport $USER_PORT -j ACCEPT || true
+        if [ ! -z "$DOMAIN_NAME" ]; then
+            iptables -I INPUT 1 -p tcp --dport 80 -j ACCEPT || true
+            iptables -I INPUT 1 -p tcp --dport 443 -j ACCEPT || true
+        fi
         
         # Save iptables if iptables-persistent is installed
         if dpkg -s iptables-persistent &>/dev/null; then
@@ -175,19 +179,20 @@ install_app() {
         fi
     fi
 
-    echo "در حال تنظیمات Nginx (وب‌سرور)..."
-    apt-get install -y nginx || true
-    systemctl enable nginx || true
-    local NGINX_STATUS="success"
-    
+    local NGINX_STATUS="skipped"
     if [ ! -z "$DOMAIN_NAME" ]; then
+        echo "در حال تنظیمات Nginx (وب‌سرور) برای دامنه $DOMAIN_NAME..."
+        apt-get install -y nginx || true
+        systemctl enable nginx || true
+        NGINX_STATUS="success"
+        
         cat <<EOF > /etc/nginx/sites-available/$DOMAIN_NAME
 server {
     listen 80;
     server_name $DOMAIN_NAME;
 
     location / {
-        proxy_pass http://localhost:$USER_PORT;
+        proxy_pass http://127.0.0.1:$USER_PORT;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -206,38 +211,39 @@ EOF
             certbot --nginx -d $DOMAIN_NAME --non-interactive --agree-tos -m admin@$DOMAIN_NAME || echo "خطا در نصب SSL. مطمئن شوید دامنه به این سرور متصل است."
         fi
     else
-        echo "در حال پیکربندی Nginx روی پورت پیشفرض ۸۰ به عنوان ریورس پروکسی..."
-        cat <<EOF > /etc/nginx/sites-available/default
-server {
-    listen 80 default_server;
-    listen [::]:80 default_server;
-    server_name _;
-
-    location / {
-        proxy_pass http://localhost:$USER_PORT;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host \$host;
-        proxy_cache_bypass \$http_upgrade;
-    }
-}
-EOF
-        ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default || true
-        systemctl restart nginx || NGINX_STATUS="failed"
+        echo "با توجه به عدم مشخص کردن دامنه، نیازی به تنظیم Nginx یا پورت‌های ۸۰ و ۴۴۳ نیست. برنامه مستقیماً از طریق پورت انتخابی شما ($USER_PORT) در دسترس خواهد بود."
+        # If we previously linked our own default config to default Nginx, remove it to restore user's original setup
+        if [ -f /etc/nginx/sites-enabled/default ] && grep -q "http://127.0.0.1:$USER_PORT" /etc/nginx/sites-enabled/default; then
+             echo "پاکسازی کانفیگ موقت ریفرس پروکسی از Nginx پیشفرض..."
+             rm -f /etc/nginx/sites-enabled/default || true
+             systemctl restart nginx || true
+        fi
+        # Start apache2 back up if present on the server
+        if which apache2 &>/dev/null; then
+             echo "فعال‌سازی مجدد وب‌سرور Apache شما تا سایت‌های شما مجدداً در دسترس قرار گیرند..."
+             systemctl start apache2 &>/dev/null || true
+             systemctl enable apache2 &>/dev/null || true
+        fi
+        # Start nginx back up (if running other sites with nginx)
+        if which nginx &>/dev/null; then
+             echo "ری‌استارت تفننی Nginx جهت سلامت سرویسی..."
+             systemctl start nginx &>/dev/null || true
+        fi
     fi
 
-    # Nginx Verification
-    echo "بررسی وضعیت وب‌سرور Nginx..."
-    if ! systemctl is-active --quiet nginx; then
-         echo "⚠️ خطا: وب‌سرور Nginx راه‌اندازی نشد."
-         echo "تلاش برای تشخیص خطا با دستور nginx -t:"
-         nginx -t || true
-         echo "سرویس‌های در حال اجرا روی پورت ۸۰:"
-         netstat -tulpen | grep :80 || ss -tulpn | grep :80 || lsof -i :80 || true
-         NGINX_STATUS="failed"
-    else
-         echo "✅ وب‌سرور Nginx با موفقیت فعال شد."
+    # Nginx Verification if active
+    if [ "$NGINX_STATUS" = "success" ]; then
+        echo "بررسی وضعیت وب‌سرور Nginx..."
+        if ! systemctl is-active --quiet nginx; then
+             echo "⚠️ خطا: وب‌سرور Nginx راه‌اندازی نشد."
+             echo "تلاش برای تشخیص خطا با دستور nginx -t:"
+             nginx -t || true
+             echo "سرویس‌های در حال اجرا روی پورت ۸۰:"
+             netstat -tulpen | grep :80 || ss -tulpn | grep :80 || lsof -i :80 || true
+             NGINX_STATUS="failed"
+        else
+             echo "✅ وب‌سرور Nginx با موفقیت فعال شد."
+        fi
     fi
 
     SERVER_IP=$(detect_public_ip)
@@ -248,11 +254,7 @@ EOF
     elif [ ! -z "$DOMAIN_NAME" ]; then
         BASE_URL="http://$DOMAIN_NAME"
     else
-        if [ "$NGINX_STATUS" = "success" ]; then
-            BASE_URL="http://$SERVER_IP"
-        else
-            BASE_URL="http://$SERVER_IP:$USER_PORT"
-        fi
+        BASE_URL="http://$SERVER_IP:$USER_PORT"
     fi
 
     echo "=========================================="
@@ -340,17 +342,17 @@ update_app() {
     echo "بیلد مجدد..."
     npm run build
 
-    # Stop Apache if it is running and blocking port 80
-    if systemctl is-active --quiet apache2 || which apache2 &>/dev/null; then
-        echo "توقف وب‌سرور Apache جهت جلوگیری از تداخل با Nginx..."
-        systemctl stop apache2 &>/dev/null || true
-        systemctl disable apache2 &>/dev/null || true
+    # Ensure Apache is running and active so we do not disrupt other user sites on ports 80/443
+    if which apache2 &>/dev/null; then
+        echo "تضمین فعال بودن وب‌سرور اصلی Apache جهت جلوگیری از تداخل با سایر سایت‌های روی پورت ۸۰/۴۴۳..."
+        systemctl start apache2 &>/dev/null || true
+        systemctl enable apache2 &>/dev/null || true
     fi
 
     echo "ری‌استارت سرور..."
     APP_PM2_NAME="digital-store-$USER_PORT"
     pm2 delete "$APP_PM2_NAME" &>/dev/null || true
-    pm2 start dist/server.cjs --name "$APP_PM2_NAME" --cwd "$APP_DIR"
+    PORT=$USER_PORT APP_PORT=$USER_PORT pm2 start dist/server.cjs --name "$APP_PM2_NAME" --cwd "$APP_DIR" --update-env
     pm2 save
     
     # PM2 Startup Diagnostics Checking
@@ -382,15 +384,19 @@ update_app() {
 
     echo "کانفیگ فایروال..."
     ufw allow $USER_PORT || true
-    ufw allow 80/tcp || true
-    ufw allow 443/tcp || true
+    if [ ! -z "$DOMAIN_NAME" ]; then
+        ufw allow 80/tcp || true
+        ufw allow 443/tcp || true
+    fi
 
     # Oracle Cloud and general iptables fix
     if command -v iptables &>/dev/null; then
         echo "تنظیم قوانین فایروال iptables جهت بازگشایی پورت‌ها..."
-        iptables -I INPUT 1 -p tcp --dport 80 -j ACCEPT || true
-        iptables -I INPUT 1 -p tcp --dport 443 -j ACCEPT || true
         iptables -I INPUT 1 -p tcp --dport $USER_PORT -j ACCEPT || true
+        if [ ! -z "$DOMAIN_NAME" ]; then
+            iptables -I INPUT 1 -p tcp --dport 80 -j ACCEPT || true
+            iptables -I INPUT 1 -p tcp --dport 443 -j ACCEPT || true
+        fi
         
         # Save iptables if iptables-persistent is installed
         if dpkg -s iptables-persistent &>/dev/null; then
@@ -398,19 +404,20 @@ update_app() {
         fi
     fi
 
-    echo "در حال تنظیم مجدد و اعمال وب‌سرور Nginx..."
-    apt-get install -y nginx || true
-    systemctl enable nginx || true
-    local NGINX_STATUS="success"
-
+    local NGINX_STATUS="skipped"
     if [ ! -z "$DOMAIN_NAME" ]; then
+        echo "در حال تنظیم مجدد و اعمال وب‌سرور Nginx برای دامنه $DOMAIN_NAME..."
+        apt-get install -y nginx || true
+        systemctl enable nginx || true
+        NGINX_STATUS="success"
+
         cat <<EOF > /etc/nginx/sites-available/$DOMAIN_NAME
 server {
     listen 80;
     server_name $DOMAIN_NAME;
 
     location / {
-        proxy_pass http://localhost:$USER_PORT;
+        proxy_pass http://127.0.0.1:$USER_PORT;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -429,38 +436,39 @@ EOF
             certbot --nginx -d $DOMAIN_NAME --non-interactive --agree-tos -m admin@$DOMAIN_NAME || echo "خطا در نصب SSL."
         fi
     else
-        echo "در حال پیکربندی Nginx روی پورت پیشفرض ۸۰ به عنوان ریورس پروکسی..."
-        cat <<EOF > /etc/nginx/sites-available/default
-server {
-    listen 80 default_server;
-    listen [::]:80 default_server;
-    server_name _;
-
-    location / {
-        proxy_pass http://localhost:$USER_PORT;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host \$host;
-        proxy_cache_bypass \$http_upgrade;
-    }
-}
-EOF
-        ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default || true
-        systemctl restart nginx || NGINX_STATUS="failed"
+        echo "با توجه به عدم مشخص کردن دامنه، نیازی به تنظیم مجدد Nginx یا پورت‌های ۸۰ و ۴۴۳ نیست. برنامه مستقیماً از طریق پورت انتخابی شما ($USER_PORT) در دسترس خواهد بود."
+        # If we previously linked our own default config to default Nginx, remove it to restore user's original setup
+        if [ -f /etc/nginx/sites-enabled/default ] && grep -q "http://127.0.0.1:$USER_PORT" /etc/nginx/sites-enabled/default; then
+             echo "پاکسازی کانفیگ موقت ریفرس پروکسی از Nginx پیشفرض..."
+             rm -f /etc/nginx/sites-enabled/default || true
+             systemctl restart nginx || true
+        fi
+        # Start apache2 back up if present on the server
+        if which apache2 &>/dev/null; then
+             echo "فعال‌سازی مجدد وب‌سرور Apache شما تا سایت‌های شما مجدداً در دسترس قرار گیرند..."
+             systemctl start apache2 &>/dev/null || true
+             systemctl enable apache2 &>/dev/null || true
+        fi
+        # Start nginx back up (if running other sites with nginx)
+        if which nginx &>/dev/null; then
+             echo "ری‌استارت تفننی Nginx جهت سلامت سرویسی..."
+             systemctl start nginx &>/dev/null || true
+        fi
     fi
 
-    # Nginx Verification
-    echo "بررسی وضعیت وب‌سرور Nginx..."
-    if ! systemctl is-active --quiet nginx; then
-         echo "⚠️ خطا: وب‌سرور Nginx راه‌اندازی نشد."
-         echo "تلاش برای تشخیص خطا با دستور nginx -t:"
-         nginx -t || true
-         echo "سرویس‌های در حال اجرا روی پورت ۸۰:"
-         netstat -tulpen | grep :80 || ss -tulpn | grep :80 || lsof -i :80 || true
-         NGINX_STATUS="failed"
-    else
-         echo "✅ وب‌سرور Nginx با موفقیت فعال شد."
+    # Nginx Verification if active
+    if [ "$NGINX_STATUS" = "success" ]; then
+        echo "بررسی وضعیت وب‌سرور Nginx..."
+        if ! systemctl is-active --quiet nginx; then
+             echo "⚠️ خطا: وب‌سرور Nginx راه‌اندازی نشد."
+             echo "تلاش برای تشخیص خطا با دستور nginx -t:"
+             nginx -t || true
+             echo "سرویس‌های در حال اجرا روی پورت ۸۰:"
+             netstat -tulpen | grep :80 || ss -tulpn | grep :80 || lsof -i :80 || true
+             NGINX_STATUS="failed"
+        else
+             echo "✅ وب‌سرور Nginx با موفقیت فعال شد."
+        fi
     fi
 
     SERVER_IP=$(detect_public_ip)
@@ -471,11 +479,7 @@ EOF
     elif [ ! -z "$DOMAIN_NAME" ]; then
         BASE_URL="http://$DOMAIN_NAME"
     else
-        if [ "$NGINX_STATUS" = "success" ]; then
-            BASE_URL="http://$SERVER_IP"
-        else
-            BASE_URL="http://$SERVER_IP:$USER_PORT"
-        fi
+        BASE_URL="http://$SERVER_IP:$USER_PORT"
     fi
 
     echo "=========================================="
