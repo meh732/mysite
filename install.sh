@@ -23,6 +23,36 @@ check_root() {
     fi
 }
 
+detect_public_ip() {
+    local IP_TEMP=""
+    local IP_PROVIDERS=(
+        "https://api.ipify.org"
+        "https://ifconfig.me/ip"
+        "https://icanhazip.com"
+        "https://ipinfo.io/ip"
+    )
+    for provider in "${IP_PROVIDERS[@]}"; do
+        local clean_ip=""
+        clean_ip=$(curl -s --max-time 3 "$provider" | tr -d '[:space:]' || true)
+        if [[ ! -z "$clean_ip" && ! "$clean_ip" =~ "<" && ! "$clean_ip" =~ "Forbidden" && ! "$clean_ip" =~ "403" ]]; then
+            if [[ "$clean_ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ || "$clean_ip" =~ : ]]; then
+                IP_TEMP="$clean_ip"
+                break
+            fi
+        fi
+    done
+
+    if [ -z "$IP_TEMP" ]; then
+        IP_TEMP=$(hostname -I | awk '{print $1}' | tr -d '[:space:]' || true)
+    fi
+    
+    # Final check if IP_TEMP is empty or contains garbage
+    if [[ -z "$IP_TEMP" || "$IP_TEMP" =~ "<" || "$IP_TEMP" =~ "Forbidden" || "$IP_TEMP" =~ "403" ]]; then
+        IP_TEMP="127.0.0.1"
+    fi
+    echo "$IP_TEMP"
+}
+
 install_app() {
     if [ -d "$APP_DIR" ]; then
         echo "اسکریپت نصب قبلا اجرا شده است. مسیر $APP_DIR وجود دارد."
@@ -117,7 +147,8 @@ EOF
         fi
     fi
 
-    SERVER_IP=$(curl -s ifconfig.me || hostname -I | awk '{print $1}')
+    SERVER_IP=$(detect_public_ip)
+    SERVER_IP=$(echo "$SERVER_IP" | xargs)
     
     if [ ! -z "$DOMAIN_NAME" ] && [[ "$INSTALL_SSL" =~ ^[Yy]$ ]]; then
         BASE_URL="https://$DOMAIN_NAME"
@@ -237,7 +268,7 @@ EOF
         fi
     fi
 
-    SERVER_IP=$(curl -s --max-time 3 ifconfig.me || hostname -I | awk '{print $1}')
+    SERVER_IP=$(detect_public_ip)
     SERVER_IP=$(echo "$SERVER_IP" | xargs)
     
     if [ ! -z "$DOMAIN_NAME" ] && [[ "$INSTALL_SSL" =~ ^[Yy]$ ]]; then
