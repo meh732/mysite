@@ -10,7 +10,7 @@ export default function Admin() {
   const navigate = useNavigate();
 
   // Settings & DB State
-  const [adminSettings, setAdminSettings] = useState({ telegramToken: '', baleToken: '', adminIdNumber: '' });
+  const [adminSettings, setAdminSettings] = useState({ telegramToken: '', baleToken: '', adminIdNumber: '', smtpHost: '', smtpPort: '', smtpUser: '', smtpPass: '', enableMobileLogin: true });
   const [products, setProducts] = useState<Product[]>([]);
   
   // Login State
@@ -223,13 +223,45 @@ export default function Admin() {
                    <label className="text-sm font-medium text-zinc-300 block mb-2">شناسه ادمین اصلی (جهت دریافت اطلاعیه‌ها در ربات)</label>
                    <input 
                      type="text" 
-                     value={adminSettings.adminIdNumber} 
+                     value={adminSettings.adminIdNumber || ''} 
                      onChange={e => setAdminSettings({...adminSettings, adminIdNumber: e.target.value})}
                      className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-white outline-none focus:border-indigo-500 transition-colors" 
                      dir="ltr" 
                      placeholder="e.g. 123456789"
                    />
                 </div>
+                
+                <div className="flex items-center gap-4 py-2">
+                  <label className="text-sm font-medium text-zinc-300">فعال بودن ورود با شماره موبایل (پیام‌رسان)</label>
+                  <button 
+                    onClick={() => setAdminSettings({...adminSettings, enableMobileLogin: !adminSettings.enableMobileLogin})}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${adminSettings.enableMobileLogin ? 'bg-indigo-500' : 'bg-zinc-700'}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${adminSettings.enableMobileLogin ? 'translate-x-1' : '-translate-x-6'}`} />
+                  </button>
+                </div>
+             </div>
+
+             <div className="glass-panel p-6">
+               <h3 className="font-bold text-lg mb-4">تنظیمات ایمیل (جهت ارسال کد یکبار مصرف)</h3>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 <div>
+                   <label className="text-sm font-medium text-zinc-300 block mb-2">SMTP Host</label>
+                   <input type="text" value={adminSettings.smtpHost || ''} onChange={e => setAdminSettings({...adminSettings, smtpHost: e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-white outline-none focus:border-indigo-500" dir="ltr" placeholder="smtp.gmail.com" />
+                 </div>
+                 <div>
+                   <label className="text-sm font-medium text-zinc-300 block mb-2">SMTP Port</label>
+                   <input type="text" value={adminSettings.smtpPort || ''} onChange={e => setAdminSettings({...adminSettings, smtpPort: e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-white outline-none focus:border-indigo-500" dir="ltr" placeholder="587" />
+                 </div>
+                 <div>
+                   <label className="text-sm font-medium text-zinc-300 block mb-2">SMTP User (Email)</label>
+                   <input type="email" value={adminSettings.smtpUser || ''} onChange={e => setAdminSettings({...adminSettings, smtpUser: e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-white outline-none focus:border-indigo-500" dir="ltr" placeholder="your-email@gmail.com" />
+                 </div>
+                 <div>
+                   <label className="text-sm font-medium text-zinc-300 block mb-2">SMTP Password</label>
+                   <input type="password" value={adminSettings.smtpPass || ''} onChange={e => setAdminSettings({...adminSettings, smtpPass: e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-white outline-none focus:border-indigo-500" dir="ltr" placeholder="App Password" />
+                 </div>
+               </div>
              </div>
 
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

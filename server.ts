@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
+import nodemailer from 'nodemailer';
 
 // --- Mock Database ---
 let products = [
@@ -19,14 +20,27 @@ let chats = [
 let settings = {
   telegramToken: '',
   baleToken: '',
-  adminIdNumber: ''
+  adminIdNumber: '',
+  smtpHost: '',
+  smtpPort: '',
+  smtpUser: '',
+  smtpPass: '',
+  enableMobileLogin: true
 };
+
+// Temp store for OTPs
+const otps: Record<string, string> = {};
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
   app.use(express.json());
+
+  // --- API Routes: Public Config ---
+  app.get('/api/config', (req, res) => {
+    res.json({ enableMobileLogin: settings.enableMobileLogin });
+  });
 
   // --- API Routes: Products ---
   app.get('/api/products', (req, res) => res.json(products));
@@ -37,15 +51,90 @@ async function startServer() {
   });
 
   // --- API Routes: Users / Auth ---
-  app.post('/api/auth/email', (req, res) => {
+  app.post('/api/auth/email/send', async (req, res) => {
     const { email } = req.body;
+    if (!email) return res.status(400).json({ success: false, message: 'ایمیل الزامی است' });
+
+    const token = Math.floor(100000 + Math.random() * 900000).toString();
+    otps[email] = token;
+
+    if (settings.smtpHost && settings.smtpUser && settings.smtpPass) {
+      try {
+        const transporter = nodemailer.createTransport({
+          host: settings.smtpHost,
+          port: parseInt(settings.smtpPort) || 587,
+          secure: parseInt(settings.smtpPort) === 465,
+          auth: {
+            user: settings.smtpUser,
+            pass: settings.smtpPass,
+          },
+        });
+        await transporter.sendMail({
+          from: `"Digital Store" <${settings.smtpUser}>`,
+          to: email,
+          subject: 'کد تایید ورود',
+          text: `کد تایید شما: ${token}`,
+          html: `<p>کد تایید شما: <strong>${token}</strong></p>`
+        });
+        console.log(`OTP sent to ${email} via SMTP.`);
+      } catch (err: any) {
+        console.error('SMTP Error:', err.message);
+        // Fallback or just inform
+      }
+    } else {
+      console.log(`Mock OTP for ${email}: ${token}`);
+    }
+
+    res.json({ success: true, message: 'کد ارسال شد' });
+  });
+
+  app.post('/api/auth/email/verify', (req, res) => {
+    const { email, code } = req.body;
+    if (!email || !code || otps[email] !== code) {
+      return res.status(401).json({ success: false, message: 'کد نامعتبر است' });
+    }
+
+    delete otps[email];
+
     let user = users.find(u => u.email === email);
     if (!user) {
       user = { id: Date.now(), email, role: 'user', createdAt: new Date() };
       users.push(user);
     }
-    // Simulate login success, return fake token
+    
     res.json({ success: true, token: `user-token-${user.id}`, user });
+  });
+
+  app.post('/api/auth/phone/send', (req, res) => {
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ success: false, message: 'شماره موبایل الزامی است' });
+
+    if (!settings.enableMobileLogin) {
+      return res.status(403).json({ success: false, message: 'ورود با شماره موبایل فعلا غیرفعال است.' });
+    }
+
+    const token = Math.floor(1000 + Math.random() * 9000).toString();
+    otps[phone] = token;
+
+    // Simulate sending OTP to Telegram & Bale bots
+    console.log(`[BOT] OTP for ${phone}: ${token}`);
+    res.json({ success: true, message: 'کد به تلگرام و بله شما ارسال شد (در صورت لاگین در ربات)' });
+  });
+
+  app.post('/api/auth/phone/verify', (req, res) => {
+    const { phone, code } = req.body;
+    if (!phone || !code || otps[phone] !== code) {
+      return res.status(401).json({ success: false, message: 'کد نامعتبر است' });
+    }
+
+    delete otps[phone];
+
+    let user = users.find(u => u.phone === phone);
+    if (!user) {
+      user = { id: Date.now(), phone, role: 'user', createdAt: new Date() };
+      users.push(user);
+    }
+    res.json({ success: true, token: `user-token-${user.id}`, user, accountType: 'phone' });
   });
 
   app.post('/api/checkout', (req, res) => {
@@ -53,14 +142,14 @@ async function startServer() {
   });
 
   // --- API Routes: Chat ---
-  app.get('/api/chat/:email', (req, res) => {
-    const chat = chats.find(c => c.userId === req.params.email) || { id: Date.now(), userId: req.params.email, messages: [] };
+  app.get('/api/chat/:userId', (req, res) => {
+    const chat = chats.find(c => c.userId === req.params.userId) || { id: Date.now(), userId: req.params.userId, messages: [] };
     res.json(chat);
   });
-  app.post('/api/chat/:email', (req, res) => {
-    let chat = chats.find(c => c.userId === req.params.email);
+  app.post('/api/chat/:userId', (req, res) => {
+    let chat = chats.find(c => c.userId === req.params.userId);
     if (!chat) {
-      chat = { id: Date.now(), userId: req.params.email, messages: [] };
+      chat = { id: Date.now(), userId: req.params.userId, messages: [] };
       chats.push(chat);
     }
     chat.messages.push({ sender: req.body.sender, text: req.body.text });

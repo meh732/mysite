@@ -24,8 +24,11 @@ export default function UserDashboard() {
 
   const handleLogout = () => {
     localStorage.removeItem('userEmail');
+    localStorage.removeItem('userPhone');
     navigate('/');
   };
+
+  const userIdentifier = localStorage.getItem('userEmail') || localStorage.getItem('userPhone');
 
   const domainOptions = [
     { label: 'ثبت دامین', icon: <Globe2 className="w-5 h-5 text-blue-400" /> },
@@ -43,7 +46,7 @@ export default function UserDashboard() {
             <span className="font-bold text-xl">پنل کاربری</span>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-zinc-400 font-mono tracking-wider">{localStorage.getItem('userEmail')}</span>
+            <span className="text-sm text-zinc-400 font-mono tracking-wider">{userIdentifier}</span>
             <button onClick={handleLogout} className="text-sm bg-zinc-800 hover:bg-red-500/20 hover:text-red-400 text-white px-4 py-2 rounded-xl transition-colors">
               خروج
             </button>
@@ -158,24 +161,24 @@ export default function UserDashboard() {
                 <Code className="text-indigo-400" />
                 دیپلوی سرویس (Github / Bash)
               </h2>
-              <p className="text-zinc-400 mb-2">جهت نصب و راه اندازی پروژه روی سرور شخصی از دستورات زیر استفاده کنید:</p>
+              <p className="text-zinc-400 mb-2">جهت نصب و راه اندازی یا آپدیت دستی سایت و ربات بر روی سرور لینوکسی از اسکریپت نصب ما استفاده کنید:</p>
               
               <div className="glass-panel p-6 font-mono text-sm space-y-4">
                 <div className="p-4 bg-zinc-950 rounded-xl text-zinc-300 overflow-x-auto" dir="ltr">
-                  $ git clone https://github.com/your-username/your-store.git<br/>
-                  $ cd your-store<br/>
-                  $ npm install<br/>
-                  $ cp .env.example .env<br/>
-                  $ npm run build<br/>
-                  $ npm run start
+                  $ curl -sL https://raw.githubusercontent.com/meh732/mysite/main/install.sh | sudo bash -
                 </div>
 
-                <div className="flex items-start gap-3 text-amber-400/80 bg-amber-400/10 p-4 rounded-xl">
+                <div className="flex items-start gap-3 text-emerald-400/80 bg-emerald-400/10 p-4 rounded-xl">
                   <Download className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm leading-relaxed">
-                    توجه: پیش از اجرای دستورات، اطمینان حاصل کنید که Node.js و Git روی ماشین سرور شما نصب شده است.
-                    همچنین متغیرهای محیطی در فایل <code>.env</code> را با مقادیر اصلی جایگزین کنید.
-                  </p>
+                  <div className="text-sm leading-relaxed">
+                    <p className="font-bold mb-1">منوی نصب تعاملی</p>
+                    <p>این اسکریپت دارای بخش مدیریت است و چک میکند که نصب تکراری انجام نشود. دارای منوی:</p>
+                    <ul className="list-disc list-inside mt-2 text-emerald-500/90 text-xs space-y-1">
+                      <li>نصب سیستم (Install) - بررسی در سرور خام</li>
+                      <li>آپدیت (Update) - کشیدن آخرین تغییرات گیت و ری‌استارت PM2</li>
+                      <li>حذف سرویس (Uninstall) - پاک کردن کامل</li>
+                    </ul>
+                  </div>
                 </div>
               </div>
             </motion.div>
