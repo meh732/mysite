@@ -93,6 +93,10 @@ install_app() {
     git clone $REPO_URL $APP_DIR
     cd $APP_DIR
 
+    # Ensure correct ownership/permissions
+    echo "تنظیم دسترسی‌های دایرکتوری پروژه..."
+    chmod -R 777 "$APP_DIR" || true
+
     echo "نصب پکیج‌ها..."
     npm install
 
@@ -105,24 +109,78 @@ install_app() {
     grep -q "^ADMIN_PASSWORD=" .env || echo "ADMIN_PASSWORD=$ADMIN_PASSWORD" >> .env
     grep -q "^DOMAIN_NAME=" .env || echo "DOMAIN_NAME=$DOMAIN_NAME" >> .env
     grep -q "^INSTALL_SSL=" .env || echo "INSTALL_SSL=$INSTALL_SSL" >> .env
+    chmod 666 .env || true
     echo ".env file created and configured."
 
     echo "ساخت نسخه پروداکشن..."
     npm run build
 
+    # Stop Apache if it is running and blocking port 80
+    if systemctl is-active --quiet apache2 || which apache2 &>/dev/null; then
+        echo "توقف وب‌سرور Apache جهت جلوگیری از تداخل با Nginx..."
+        systemctl stop apache2 &>/dev/null || true
+        systemctl disable apache2 &>/dev/null || true
+    fi
+
     echo "نصب PM2 و اجرای سرور..."
     npm install -g pm2
     APP_PM2_NAME="digital-store-$USER_PORT"
-    pm2 start dist/server.cjs --name $APP_PM2_NAME
+    pm2 delete "$APP_PM2_NAME" &>/dev/null || true
+    pm2 start dist/server.cjs --name "$APP_PM2_NAME" --cwd "$APP_DIR"
     pm2 save
     pm2 startup
     
-    echo "کانفیگ فایروال (Optional)..."
-    ufw allow $USER_PORT
+    # PM2 Startup Diagnostics Checking
+    echo "در حال بررسی وضعیت فرآیند در PM2..."
+    sleep 3
+    if ! pm2 status "$APP_PM2_NAME" | grep -q "online"; then
+        echo "⚠️ فرآیند در PM2 آنلاین نیست! لاگ‌های خطا را بررسی کنید:"
+        pm2 logs "$APP_PM2_NAME" --lines 15 --no-daemon &
+        PID_LOGS=$!
+        sleep 3
+        kill $PID_LOGS &>/dev/null || true
+    else
+        echo "✅ فرآیند با موفقیت در PM2 اجرا شد و آنلاین است."
+        echo "آخرین لاگ‌های سرور برای اطمینان از سلامت اجرا:"
+        pm2 logs "$APP_PM2_NAME" --lines 10 --no-daemon &
+        PID_LOGS=$!
+        sleep 3
+        kill $PID_LOGS &>/dev/null || true
+    fi
 
+    # Local Connection Check
+    echo "در حال بررسی پاسخ‌دهی سرور داخلی..."
+    local_test=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:$USER_PORT || true)
+    if [ "$local_test" = "200" ] || [ "$local_test" = "301" ] || [ "$local_test" = "302" ]; then
+        echo "✅ سرور داخلی روی پورت $USER_PORT پاسخگو است. (کد وضعیت: $local_test)"
+    else
+        echo "⚠️ هشدار: سرور داخلی پاسخ مناسبی نمی‌دهد (کد وضعیت: $local_test)."
+    fi
+
+    echo "کانفیگ فایروال..."
+    ufw allow $USER_PORT || true
+    ufw allow 80/tcp || true
+    ufw allow 443/tcp || true
+
+    # Oracle Cloud and general iptables fix
+    if command -v iptables &>/dev/null; then
+        echo "تنظیم قوانین فایروال iptables جهت بازگشایی پورت‌ها..."
+        iptables -I INPUT 1 -p tcp --dport 80 -j ACCEPT || true
+        iptables -I INPUT 1 -p tcp --dport 443 -j ACCEPT || true
+        iptables -I INPUT 1 -p tcp --dport $USER_PORT -j ACCEPT || true
+        
+        # Save iptables if iptables-persistent is installed
+        if dpkg -s iptables-persistent &>/dev/null; then
+            netfilter-persistent save || true
+        fi
+    fi
+
+    echo "در حال تنظیمات Nginx (وب‌سرور)..."
+    apt-get install -y nginx || true
+    systemctl enable nginx || true
+    local NGINX_STATUS="success"
+    
     if [ ! -z "$DOMAIN_NAME" ]; then
-        echo "در حال تنظیمات Nginx (وب‌سرور)..."
-        apt-get install -y nginx
         cat <<EOF > /etc/nginx/sites-available/$DOMAIN_NAME
 server {
     listen 80;
@@ -139,14 +197,47 @@ server {
 }
 EOF
         ln -sf /etc/nginx/sites-available/$DOMAIN_NAME /etc/nginx/sites-enabled/
-        systemctl restart nginx
-        ufw allow 'Nginx Full'
+        systemctl restart nginx || NGINX_STATUS="failed"
+        ufw allow 'Nginx Full' || true
 
         if [[ "$INSTALL_SSL" =~ ^[Yy]$ ]]; then
             echo "در حال نصب گواهی SSL..."
-            apt-get install -y certbot python3-certbot-nginx
+            apt-get install -y certbot python3-certbot-nginx || true
             certbot --nginx -d $DOMAIN_NAME --non-interactive --agree-tos -m admin@$DOMAIN_NAME || echo "خطا در نصب SSL. مطمئن شوید دامنه به این سرور متصل است."
         fi
+    else
+        echo "در حال پیکربندی Nginx روی پورت پیشفرض ۸۰ به عنوان ریورس پروکسی..."
+        cat <<EOF > /etc/nginx/sites-available/default
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+
+    location / {
+        proxy_pass http://localhost:$USER_PORT;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_cache_bypass \$http_upgrade;
+    }
+}
+EOF
+        ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default || true
+        systemctl restart nginx || NGINX_STATUS="failed"
+    fi
+
+    # Nginx Verification
+    echo "بررسی وضعیت وب‌سرور Nginx..."
+    if ! systemctl is-active --quiet nginx; then
+         echo "⚠️ خطا: وب‌سرور Nginx راه‌اندازی نشد."
+         echo "تلاش برای تشخیص خطا با دستور nginx -t:"
+         nginx -t || true
+         echo "سرویس‌های در حال اجرا روی پورت ۸۰:"
+         netstat -tulpen | grep :80 || ss -tulpn | grep :80 || lsof -i :80 || true
+         NGINX_STATUS="failed"
+    else
+         echo "✅ وب‌سرور Nginx با موفقیت فعال شد."
     fi
 
     SERVER_IP=$(detect_public_ip)
@@ -157,16 +248,26 @@ EOF
     elif [ ! -z "$DOMAIN_NAME" ]; then
         BASE_URL="http://$DOMAIN_NAME"
     else
-        BASE_URL="http://$SERVER_IP:$USER_PORT"
+        if [ "$NGINX_STATUS" = "success" ]; then
+            BASE_URL="http://$SERVER_IP"
+        else
+            BASE_URL="http://$SERVER_IP:$USER_PORT"
+        fi
     fi
 
     echo "=========================================="
     echo "نصب با موفقیت انجام شد!"
     echo "آدرس سایت شما:"
     echo "$BASE_URL"
+    if [ -z "$DOMAIN_NAME" ] && [ "$NGINX_STATUS" = "success" ]; then
+        echo "آدرس جایگزین مستقیم (پورت): http://$SERVER_IP:$USER_PORT"
+    fi
     echo ""
     echo "آدرس پنل مدیریت:"
     echo "$BASE_URL/admin"
+    if [ -z "$DOMAIN_NAME" ] && [ "$NGINX_STATUS" = "success" ]; then
+        echo "آدرس جایگزین مدیریت (پورت): http://$SERVER_IP:$USER_PORT/admin"
+    fi
     echo "یوزرنیم: $ADMIN_USERNAME"
     echo "رمزعبور: $ADMIN_PASSWORD"
     echo "=========================================="
@@ -216,6 +317,10 @@ update_app() {
     git reset --hard
     git pull origin main
 
+    # Ensure correct ownership/permissions
+    echo "تنظیم مجدد دسترسی‌های دایرکتوری پروژه..."
+    chmod -R 777 "$APP_DIR" || true
+
     echo "نصب پکیج‌ها..."
     npm install
     
@@ -230,20 +335,75 @@ update_app() {
     grep -q "^ADMIN_PASSWORD=" .env && sed -i "s/^ADMIN_PASSWORD=.*/ADMIN_PASSWORD=$ADMIN_PASSWORD/" .env || echo "ADMIN_PASSWORD=$ADMIN_PASSWORD" >> .env
     grep -q "^DOMAIN_NAME=" .env && sed -i "s/^DOMAIN_NAME=.*/DOMAIN_NAME=$DOMAIN_NAME/" .env || echo "DOMAIN_NAME=$DOMAIN_NAME" >> .env
     grep -q "^INSTALL_SSL=" .env && sed -i "s/^INSTALL_SSL=.*/INSTALL_SSL=$INSTALL_SSL/" .env || echo "INSTALL_SSL=$INSTALL_SSL" >> .env
+    chmod 666 .env || true
 
     echo "بیلد مجدد..."
     npm run build
 
+    # Stop Apache if it is running and blocking port 80
+    if systemctl is-active --quiet apache2 || which apache2 &>/dev/null; then
+        echo "توقف وب‌سرور Apache جهت جلوگیری از تداخل با Nginx..."
+        systemctl stop apache2 &>/dev/null || true
+        systemctl disable apache2 &>/dev/null || true
+    fi
+
     echo "ری‌استارت سرور..."
     APP_PM2_NAME="digital-store-$USER_PORT"
-    pm2 restart $APP_PM2_NAME || pm2 start dist/server.cjs --name $APP_PM2_NAME
+    pm2 delete "$APP_PM2_NAME" &>/dev/null || true
+    pm2 start dist/server.cjs --name "$APP_PM2_NAME" --cwd "$APP_DIR"
     pm2 save
     
-    ufw allow $USER_PORT
+    # PM2 Startup Diagnostics Checking
+    echo "در حال بررسی وضعیت فرآیند در PM2..."
+    sleep 3
+    if ! pm2 status "$APP_PM2_NAME" | grep -q "online"; then
+        echo "⚠️ فرآیند در PM2 آنلاین نیست! لاگ‌های خطا را بررسی کنید:"
+        pm2 logs "$APP_PM2_NAME" --lines 15 --no-daemon &
+        PID_LOGS=$!
+        sleep 3
+        kill $PID_LOGS &>/dev/null || true
+    else
+        echo "✅ فرآیند با موفقیت در PM2 اجرا شد و آنلاین است."
+        echo "آخرین لاگ‌های سرور برای اطمینان از سلامت اجرا:"
+        pm2 logs "$APP_PM2_NAME" --lines 10 --no-daemon &
+        PID_LOGS=$!
+        sleep 3
+        kill $PID_LOGS &>/dev/null || true
+    fi
+
+    # Local Connection Check
+    echo "در حال بررسی پاسخ‌دهی سرور داخلی..."
+    local_test=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:$USER_PORT || true)
+    if [ "$local_test" = "200" ] || [ "$local_test" = "301" ] || [ "$local_test" = "302" ]; then
+        echo "✅ سرور داخلی روی پورت $USER_PORT پاسخگو است. (کد وضعیت: $local_test)"
+    else
+        echo "⚠️ هشدار: سرور داخلی پاسخ مناسبی نمی‌دهد (کد وضعیت: $local_test)."
+    fi
+
+    echo "کانفیگ فایروال..."
+    ufw allow $USER_PORT || true
+    ufw allow 80/tcp || true
+    ufw allow 443/tcp || true
+
+    # Oracle Cloud and general iptables fix
+    if command -v iptables &>/dev/null; then
+        echo "تنظیم قوانین فایروال iptables جهت بازگشایی پورت‌ها..."
+        iptables -I INPUT 1 -p tcp --dport 80 -j ACCEPT || true
+        iptables -I INPUT 1 -p tcp --dport 443 -j ACCEPT || true
+        iptables -I INPUT 1 -p tcp --dport $USER_PORT -j ACCEPT || true
+        
+        # Save iptables if iptables-persistent is installed
+        if dpkg -s iptables-persistent &>/dev/null; then
+            netfilter-persistent save || true
+        fi
+    fi
+
+    echo "در حال تنظیم مجدد و اعمال وب‌سرور Nginx..."
+    apt-get install -y nginx || true
+    systemctl enable nginx || true
+    local NGINX_STATUS="success"
 
     if [ ! -z "$DOMAIN_NAME" ]; then
-        echo "در حال تنظیم مجدد و اعمال وب‌سرور Nginx..."
-        apt-get install -y nginx
         cat <<EOF > /etc/nginx/sites-available/$DOMAIN_NAME
 server {
     listen 80;
@@ -260,14 +420,47 @@ server {
 }
 EOF
         ln -sf /etc/nginx/sites-available/$DOMAIN_NAME /etc/nginx/sites-enabled/
-        systemctl restart nginx
-        ufw allow 'Nginx Full'
+        systemctl restart nginx || NGINX_STATUS="failed"
+        ufw allow 'Nginx Full' || true
 
         if [[ "$INSTALL_SSL" =~ ^[Yy]$ ]]; then
             echo "در حال نصب/بروزرسانی گواهی SSL..."
-            apt-get install -y certbot python3-certbot-nginx
+            apt-get install -y certbot python3-certbot-nginx || true
             certbot --nginx -d $DOMAIN_NAME --non-interactive --agree-tos -m admin@$DOMAIN_NAME || echo "خطا در نصب SSL."
         fi
+    else
+        echo "در حال پیکربندی Nginx روی پورت پیشفرض ۸۰ به عنوان ریورس پروکسی..."
+        cat <<EOF > /etc/nginx/sites-available/default
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+
+    location / {
+        proxy_pass http://localhost:$USER_PORT;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_cache_bypass \$http_upgrade;
+    }
+}
+EOF
+        ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default || true
+        systemctl restart nginx || NGINX_STATUS="failed"
+    fi
+
+    # Nginx Verification
+    echo "بررسی وضعیت وب‌سرور Nginx..."
+    if ! systemctl is-active --quiet nginx; then
+         echo "⚠️ خطا: وب‌سرور Nginx راه‌اندازی نشد."
+         echo "تلاش برای تشخیص خطا با دستور nginx -t:"
+         nginx -t || true
+         echo "سرویس‌های در حال اجرا روی پورت ۸۰:"
+         netstat -tulpen | grep :80 || ss -tulpn | grep :80 || lsof -i :80 || true
+         NGINX_STATUS="failed"
+    else
+         echo "✅ وب‌سرور Nginx با موفقیت فعال شد."
     fi
 
     SERVER_IP=$(detect_public_ip)
@@ -278,16 +471,26 @@ EOF
     elif [ ! -z "$DOMAIN_NAME" ]; then
         BASE_URL="http://$DOMAIN_NAME"
     else
-        BASE_URL="http://$SERVER_IP:$USER_PORT"
+        if [ "$NGINX_STATUS" = "success" ]; then
+            BASE_URL="http://$SERVER_IP"
+        else
+            BASE_URL="http://$SERVER_IP:$USER_PORT"
+        fi
     fi
 
     echo "=========================================="
     echo "بروزرسانی با موفقیت انجام شد!"
     echo "آدرس سایت شما:"
     echo "$BASE_URL"
+    if [ -z "$DOMAIN_NAME" ] && [ "$NGINX_STATUS" = "success" ]; then
+        echo "آدرس جایگزین مستقیم (پورت): http://$SERVER_IP:$USER_PORT"
+    fi
     echo ""
     echo "آدرس پنل مدیریت:"
     echo "$BASE_URL/admin"
+    if [ -z "$DOMAIN_NAME" ] && [ "$NGINX_STATUS" = "success" ]; then
+        echo "آدرس جایگزین مدیریت (پورت): http://$SERVER_IP:$USER_PORT/admin"
+    fi
     echo "یوزرنیم: $ADMIN_USERNAME"
     echo "رمزعبور: $ADMIN_PASSWORD"
     echo "=========================================="
