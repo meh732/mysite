@@ -165,7 +165,7 @@ export default function UserDashboard() {
               
               <div className="glass-panel p-6 font-mono text-sm space-y-4">
                 <div className="p-4 bg-zinc-950 rounded-xl text-zinc-300 overflow-x-auto" dir="ltr">
-                  $ curl -sL https://raw.githubusercontent.com/meh732/mysite/main/install.sh | sudo bash -
+                  $ bash &lt;(curl -sL https://raw.githubusercontent.com/meh732/mysite/main/install.sh)
                 </div>
 
                 <div className="flex items-start gap-3 text-emerald-400/80 bg-emerald-400/10 p-4 rounded-xl">
