@@ -244,6 +244,15 @@ export default function Admin() {
 
              <div className="glass-panel p-6">
                <h3 className="font-bold text-lg mb-4">تنظیمات ایمیل (جهت ارسال کد یکبار مصرف)</h3>
+               
+               <div className="bg-blue-500/10 border border-blue-500/20 text-blue-400 p-4 rounded-xl text-sm mb-6 leading-relaxed">
+                 <strong>راهنمای تنظیم جیمیل (Gmail):</strong><br />
+                 ۱. <strong>SMTP Host:</strong> <code>smtp.gmail.com</code> | <strong>SMTP Port:</strong> <code>587</code> یا <code>465</code><br />
+                 ۲. <strong>SMTP User:</strong> آدرس جیمیل شما (مثلا example@gmail.com)<br />
+                 ۳. <strong>SMTP Password:</strong> باید از گوگل یک <strong>App Password (رمز عبور برنامه)</strong> بگیرید. رمز اصلی جیمیل کار نمی‌کند.<br />
+                 <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="underline mt-1 inline-block">لینک ساخت App Password در گوگل</a>
+               </div>
+
                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                  <div>
                    <label className="text-sm font-medium text-zinc-300 block mb-2">SMTP Host</label>
