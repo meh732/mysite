@@ -574,11 +574,19 @@ initBaleBot();
 async function startServer() {
   const app = express();
   
-  const isProd = process.env.NODE_ENV === 'production' || __dirname.includes('dist') || !fs.existsSync(path.join(process.cwd(), 'server.ts'));
+  // Robust production detection that works both on local dev environment and real Linux servers (including PM2)
+  const argvPath = process.argv[1] || '';
+  const isProd = process.env.NODE_ENV === 'production' || 
+                 argvPath.includes('dist') || 
+                 argvPath.endsWith('.cjs') || 
+                 (typeof __filename !== 'undefined' && (__filename.includes('dist') || __filename.endsWith('.cjs'))) ||
+                 !fs.existsSync(path.join(process.cwd(), 'server.ts'));
   
   let PORT = 3000;
   if (isProd) {
     PORT = Number(process.env.APP_PORT || process.env.PORT || 3000);
+  } else {
+    PORT = 3000;
   }
 
   app.use(express.json());
@@ -898,7 +906,9 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    // If running compiled bundle from dist/ folder, __dirname points directly to dist/
+    // Otherwise fallback to process.cwd() / 'dist'
+    const distPath = __dirname.includes('dist') ? __dirname : path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
