@@ -14,7 +14,22 @@ export default function Admin() {
   const navigate = useNavigate();
 
   // Settings & DB State
-  const [adminSettings, setAdminSettings] = useState({ telegramToken: '', baleToken: '', adminTelegramChatId: '', adminBaleChatId: '', adminIdNumber: '', smtpHost: '', smtpPort: '', smtpUser: '', smtpPass: '', enableMobileLogin: true });
+  const [adminSettings, setAdminSettings] = useState({ 
+    telegramToken: '', 
+    baleToken: '', 
+    adminTelegramChatId: '', 
+    adminBaleChatId: '', 
+    adminIdNumber: '', 
+    smtpHost: '', 
+    smtpPort: '', 
+    smtpUser: '', 
+    smtpPass: '', 
+    enableMobileLogin: true,
+    enableTelegramJoinCheck: false,
+    telegramJoinChannel: '',
+    enableBaleJoinCheck: false,
+    baleJoinChannel: ''
+  });
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -33,6 +48,7 @@ export default function Admin() {
   const [formCategory, setFormCategory] = useState('ai');
   const [formIcon, setFormIcon] = useState('Bot');
   const [formActive, setFormActive] = useState(true);
+  const [formSpecs, setFormSpecs] = useState('');
 
   // Login State
   const [username, setUsername] = useState('');
@@ -105,6 +121,7 @@ export default function Admin() {
     setFormCategory('ai');
     setFormIcon('Bot');
     setFormActive(true);
+    setFormSpecs('');
     setIsProductModalOpen(true);
   };
 
@@ -117,6 +134,7 @@ export default function Admin() {
     setFormCategory(prod.category);
     setFormIcon(prod.icon);
     setFormActive(prod.active !== false);
+    setFormSpecs(prod.specs || '');
     setIsProductModalOpen(true);
   };
 
@@ -134,7 +152,8 @@ export default function Admin() {
       type: formType,
       category: formCategory,
       icon: formIcon,
-      active: formActive
+      active: formActive,
+      specs: formSpecs
     };
 
     if (editingProduct) {
@@ -733,6 +752,31 @@ export default function Admin() {
                        dir="ltr" 
                      />
                    </div>
+                   <div className="mt-4 pt-4 border-t border-zinc-850 space-y-3">
+                     <div className="flex items-center justify-between">
+                       <span className="text-xs font-semibold text-zinc-300">عضویت اجباری کانال تلگرام:</span>
+                       <button 
+                         type="button"
+                         onClick={() => setAdminSettings({...adminSettings, enableTelegramJoinCheck: !adminSettings.enableTelegramJoinCheck})}
+                         className={`px-3 py-1.5 text-[10px] rounded-lg font-bold border transition-colors cursor-pointer ${adminSettings.enableTelegramJoinCheck ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-zinc-850 text-zinc-400 border-zinc-800'}`}
+                       >
+                         {adminSettings.enableTelegramJoinCheck ? 'روشن ✅' : 'خاموش ❌'}
+                       </button>
+                     </div>
+                     {adminSettings.enableTelegramJoinCheck && (
+                       <div>
+                         <label className="text-[10px] text-zinc-400 block mb-1">آدرس کانال تلگرام (با @):</label>
+                         <input 
+                           type="text"
+                           value={adminSettings.telegramJoinChannel || ''}
+                           onChange={e => setAdminSettings({...adminSettings, telegramJoinChannel: e.target.value})}
+                           placeholder="@mychannel"
+                           className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-sky-500 transition-colors font-mono"
+                           dir="ltr"
+                         />
+                       </div>
+                     )}
+                   </div>
                 </div>
 
                 <div className="glass-panel p-6 border border-zinc-805/40 bg-zinc-900/30">
@@ -752,6 +796,31 @@ export default function Admin() {
                        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-zinc-300 outline-none focus:border-emerald-500 transition-colors" 
                        dir="ltr" 
                      />
+                   </div>
+                   <div className="mt-4 pt-4 border-t border-zinc-850 space-y-3">
+                     <div className="flex items-center justify-between">
+                       <span className="text-xs font-semibold text-zinc-300">عضویت اجباری کانال بله:</span>
+                       <button 
+                         type="button"
+                         onClick={() => setAdminSettings({...adminSettings, enableBaleJoinCheck: !adminSettings.enableBaleJoinCheck})}
+                         className={`px-3 py-1.5 text-[10px] rounded-lg font-bold border transition-colors cursor-pointer ${adminSettings.enableBaleJoinCheck ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-zinc-850 text-zinc-400 border-zinc-800'}`}
+                       >
+                         {adminSettings.enableBaleJoinCheck ? 'روشن ✅' : 'خاموش ❌'}
+                       </button>
+                     </div>
+                     {adminSettings.enableBaleJoinCheck && (
+                       <div>
+                         <label className="text-[10px] text-zinc-400 block mb-1">آدرس کانال بله (با @):</label>
+                         <input 
+                           type="text"
+                           value={adminSettings.baleJoinChannel || ''}
+                           onChange={e => setAdminSettings({...adminSettings, baleJoinChannel: e.target.value})}
+                           placeholder="@mychannel"
+                           className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-emerald-500 transition-colors font-mono"
+                           dir="ltr"
+                         />
+                       </div>
+                     )}
                    </div>
                 </div>
              </div>
@@ -935,11 +1004,22 @@ export default function Admin() {
                 <div>
                   <label className="block text-sm font-medium mb-1.5 text-zinc-300">توضیحات کوتاه محصول / پکیج</label>
                   <textarea
-                    rows={3}
+                    rows={2}
                     value={formDesc}
                     onChange={e => setFormDesc(e.target.value)}
                     placeholder="جزییات تحویل پکیج، حجم سرویس، یا سناریوی لایسنس را بنویسید..."
                     className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-indigo-500 transition-colors outline-none"
+                  ></textarea>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1.5 text-zinc-300">ویژگی‌ها و جزئیات تکمیلی نمایش در سایت (هر ویژگی در یک خط جداگانه)</label>
+                  <textarea
+                    rows={3}
+                    value={formSpecs}
+                    onChange={e => setFormSpecs(e.target.value)}
+                    placeholder="مثال:&#10;پشتیبانی ۲۴ ساعته اختصاصی ادمین&#10;تضمین بازگشت وجه تا ۷ روز&#10;سرعت فوق‌العاده بالا و پایداری بالا"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs text-zinc-200 focus:border-indigo-500 transition-colors outline-none"
                   ></textarea>
                 </div>
 

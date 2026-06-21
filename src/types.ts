@@ -7,6 +7,7 @@ export interface Product {
   price: string;
   icon: string;
   active?: boolean;
+  specs?: string; // New field for customizable detailed features/specs
 }
 
 export interface Order {

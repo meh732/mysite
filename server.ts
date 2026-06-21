@@ -20,6 +20,24 @@ let orders = [
 ];
 
 let users: any[] = [];
+let tickets: any[] = [
+  { 
+    id: 2001, 
+    userIdentifier: 'meh732@gmail.com', 
+    title: 'درخواست راه اندازی دامنه اختصاصی', 
+    body: 'سلام، لطفا دامنه جدید من را تعریف کنید تا بتوانم دیپلوی کنم.', 
+    status: 'open', 
+    priority: 'high', 
+    createdAt: new Date().toISOString(), 
+    replies: [
+      { sender: 'user', text: 'سلام، لطفا دامنه جدید من را تعریف کنید تا بتوانم دیپلوی کنم.', createdAt: new Date().toISOString() },
+      { sender: 'admin', text: 'سلام کاربر عزیز، پورت و نیم سرورهای دامنه را برای ما تیکت کنید یا آی‌آی‌پی سرور خود را بفرستید تا سریعاً فعال‌سازی انجام شود.', createdAt: new Date().toISOString() }
+    ]
+  }
+];
+let transactions: any[] = [
+  { id: 3001, userIdentifier: 'meh732@gmail.com', amount: 500000, description: 'هدیه خوش‌آمدگویی و شارژ اولیه حساب', type: 'credit', createdAt: new Date().toISOString() }
+];
 let chats = [
   { id: 1, userId: 'user@example.com', messages: [{ sender: 'user', text: 'سلام، برای ربات تلگرام نیاز به مشاوره دارم.' }, { sender: 'admin', text: 'سلام! در خدمتیم. چه امکانی مد نظرتون هست؟' }] }
 ];
@@ -33,7 +51,11 @@ let settings = {
   smtpPort: '',
   smtpUser: '',
   smtpPass: '',
-  enableMobileLogin: true
+  enableMobileLogin: true,
+  enableTelegramJoinCheck: false,
+  telegramJoinChannel: '',
+  enableBaleJoinCheck: false,
+  baleJoinChannel: ''
 };
 let botUsers: Array<{
   phone: string;
@@ -54,6 +76,8 @@ function loadDatabase() {
       if (data.chats) chats = data.chats;
       if (data.settings) settings = data.settings;
       if (data.botUsers) botUsers = data.botUsers;
+      if (data.tickets) tickets = data.tickets;
+      if (data.transactions) transactions = data.transactions;
       console.log('Database loaded successfully from database.json');
     }
   } catch (err) {
@@ -63,7 +87,7 @@ function loadDatabase() {
 
 function saveDatabase() {
   try {
-    const data = { products, orders, users, chats, settings, botUsers };
+    const data = { products, orders, users, chats, settings, botUsers, tickets, transactions };
     fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf8');
   } catch (err) {
     console.error('Error saving database.json:', err);
@@ -146,6 +170,37 @@ async function pollBale() {
 // Active states for checkout flow and admin panel overrides
 const userCheckoutStates: Record<string, { productId: number }> = {};
 const adminModeOverride: Record<string, 'admin' | 'user'> = {};
+
+// Helper to check user membership in Telegram or Bale channel (Mandatory Join check)
+async function isUserMemberOfChannel(platform: 'telegram' | 'bale', botToken: string, channel: string, userId: number): Promise<boolean> {
+  if (!botToken || !channel) return true; // fail-safe
+  const apiHost = platform === 'telegram' ? 'https://api.telegram.org' : 'https://tapi.bale.ai';
+  try {
+    const formattedChannel = channel.trim().startsWith('@') ? channel.trim() : (channel.trim().startsWith('-') ? channel.trim() : `@${channel.trim()}`);
+    const checkUrl = `${apiHost}/bot${botToken}/getChatMember`;
+    const response = await fetch(checkUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: formattedChannel,
+        user_id: userId
+      })
+    });
+    if (!response.ok) {
+      console.warn(`getChatMember responded with error status ${response.status} on ${platform}`);
+      return false;
+    }
+    const data: any = await response.json();
+    if (data && data.ok && data.result) {
+      const status = data.result.status;
+      return ['creator', 'administrator', 'member', 'restricted'].includes(status);
+    }
+    return false;
+  } catch (err) {
+    console.error(`Error checking channel membership on ${platform}:`, err);
+    return true; // fail-open so bot remains accessible on errors
+  }
+}
 
 // Helper to send JSON backup as a document
 async function sendBotDocument(apiHost: string, token: string, chatId: number, filename: string, content: string) {
@@ -251,6 +306,58 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
     resize_keyboard: true,
     one_time_keyboard: true
   };
+
+  // --- MANDATORY CHANNEL JOIN CHECK ---
+  const isChannelCheckEnabled = platform === 'telegram' 
+    ? (settings.enableTelegramJoinCheck && settings.telegramJoinChannel) 
+    : (settings.enableBaleJoinCheck && settings.baleJoinChannel);
+
+  const targetChannel = platform === 'telegram' ? settings.telegramJoinChannel : settings.baleJoinChannel;
+
+  if (isChannelCheckEnabled && !isAdmin) {
+    const tokenToCheck = platform === 'telegram' ? settings.telegramToken : settings.baleToken;
+    const isMember = await isUserMemberOfChannel(platform, tokenToCheck, targetChannel, chat.id);
+    
+    if (!isMember) {
+      const channelUsername = targetChannel.replace('@', '');
+      const channelLink = platform === 'telegram' 
+        ? `https://t.me/${channelUsername}` 
+        : `https://ble.ir/${channelUsername}`;
+
+      const joinPrompt = `⚠️ **عضویت اجباری در کانال دیجیتال استور**\n\nبرای استفاده از خدمات این ربات، ابتدا باید در کانال اختصاصی ما عضو شوید.\n\n📢 آیدی کانال: ${targetChannel}\n\nلطفاً پس از عضویت در کانال، دکمه **«تایید عضویت ✅»** زیر را فشار دهید:`;
+
+      const joinKeyboard = {
+        inline_keyboard: [
+          [{ text: "📢 ورود به کانال", url: channelLink }],
+          [{ text: "تایید عضویت ✅", callback_data: "check_membership" }]
+        ]
+      };
+
+      if (text === 'check_membership') {
+        await reply(`❌ هنوز عضو کانال نشده‌اید! لطفاً ابتدا عضو شده و مجدداً تلاش کنید.`, joinKeyboard);
+      } else {
+        await reply(joinPrompt, joinKeyboard);
+      }
+      return;
+    } else {
+      if (text === 'check_membership') {
+        const userMap = botUsers.find(u => 
+          (platform === 'telegram' && u.telegramChatId === chat.id) || 
+          (platform === 'bale' && u.baleChatId === chat.id)
+        );
+        await reply(`🎉 با تشکر! عضویت شما در کانال تایید شد. اکنون می‌توانید از ربات استفاده کنید.`);
+        if (!userMap) {
+          await reply(
+            `برای همگام‌سازی سریع حساب و دریافت لحظه‌ای کدهای تایید در پیام‌رسان ${platformName}، لطفا شماره تلفن ۱۱ رقمی خود را تایپ کنید (مثلاً: 09123456789) یا دکمه زیر را جهت ارسال شماره فشار دهید:`,
+            registerKeyboard
+          );
+        } else {
+          await reply(`🛍️ منوی کامل فروشگاه فعال است:`, getUserKeyboard(false));
+        }
+        return;
+      }
+    }
+  }
 
   // --- ADMIN COMMANDS INTERFACE ---
   if (isAdmin && currentMode === 'admin') {
@@ -634,6 +741,70 @@ async function startServer() {
   });
 
   // --- API Routes: Users / Auth ---
+  app.post('/api/auth/register', (req, res) => {
+    const { name, email, phone, password } = req.body;
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'نام و نام خانوادگی الزامی است' });
+    }
+    if (!password) {
+      return res.status(400).json({ success: false, message: 'کلمه عبور الزامی است' });
+    }
+    if (!email && !phone) {
+      return res.status(400).json({ success: false, message: 'وارد کردن حداقل یکی از موارد ایمیل یا شماره موبایل الزامی است' });
+    }
+
+    if (email) {
+      const existingEmail = users.find(u => u.email && u.email.toLowerCase() === email.toLowerCase());
+      if (existingEmail) {
+        return res.status(400).json({ success: false, message: 'کاربری با این ایمیل قبلاً ثبت نام کرده است' });
+      }
+    }
+    if (phone) {
+      const existingPhone = users.find(u => u.phone && u.phone === phone);
+      if (existingPhone) {
+        return res.status(400).json({ success: false, message: 'کاربری با این شماره موبایل قبلاً ثبت نام کرده است' });
+      }
+    }
+
+    const newUser = {
+      id: Date.now(),
+      name,
+      email: email || '',
+      phone: phone || '',
+      password,
+      role: 'user',
+      createdAt: new Date()
+    };
+
+    users.push(newUser);
+    saveDatabase();
+
+    res.json({ success: true, message: 'ثبت‌نام با موفقیت انجام شد!', user: newUser });
+  });
+
+  app.post('/api/auth/login-with-password', (req, res) => {
+    const { identifier, password } = req.body;
+    if (!identifier || !password) {
+      return res.status(400).json({ success: false, message: 'مشخصات ورود و کلمه عبور الزامی است' });
+    }
+
+    const cleanIdentifier = identifier.trim().toLowerCase();
+    const user = users.find(u => 
+      (u.email && u.email.toLowerCase() === cleanIdentifier) ||
+      (u.phone && u.phone === cleanIdentifier)
+    );
+
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'کاربری با این مشخصات یافت نشد' });
+    }
+
+    if (user.password !== password) {
+      return res.status(401).json({ success: false, message: 'کلمه عبور وارد شده نادرست است' });
+    }
+
+    res.json({ success: true, token: `user-token-${user.id}`, user });
+  });
+
   app.post('/api/auth/email/send', async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ success: false, message: 'ایمیل الزامی است' });
@@ -764,11 +935,74 @@ async function startServer() {
   });
   
   app.post('/api/checkout', (req, res) => {
-    const { productId, userIdentifier, additionalDetails } = req.body;
+    const { productId, userIdentifier, additionalDetails, paymentMethod } = req.body;
     const prod = products.find(p => p.id === parseInt(productId, 10));
     if (!prod) {
       return res.status(404).json({ success: false, message: 'محصول پیدا نشد' });
     }
+
+    // Helper to parse price string to number
+    const parsePrice = (priceStr: string): number => {
+      if (!priceStr) return 0;
+      let clean = priceStr
+        .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString())
+        .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString());
+      clean = clean.replace(/\D/g, '');
+      const num = parseInt(clean, 10);
+      return isNaN(num) ? 0 : num;
+    };
+
+    const priceNum = parsePrice(prod.price);
+    let walletDeducted = false;
+
+    if (paymentMethod === 'wallet') {
+      const cleanId = userIdentifier.trim().toLowerCase();
+      let user = users.find(u => 
+        (u.email && u.email.toLowerCase() === cleanId) || 
+        (u.phone && u.phone === cleanId) ||
+        (u.name && u.name.toLowerCase() === cleanId)
+      );
+
+      if (!user) {
+        user = {
+          id: Date.now(),
+          name: 'کاربر گرامی',
+          email: userIdentifier.includes('@') ? userIdentifier : '',
+          phone: !userIdentifier.includes('@') ? userIdentifier : '',
+          walletBalance: userIdentifier.trim().toLowerCase() === 'meh732@gmail.com' ? 500000 : 0,
+          role: 'user',
+          createdAt: new Date()
+        };
+        users.push(user);
+      }
+
+      if (user.walletBalance === undefined) {
+        user.walletBalance = user.email === 'meh732@gmail.com' ? 500000 : 0;
+      }
+
+      if (user.walletBalance < priceNum) {
+        return res.status(400).json({ 
+          success: false, 
+          requireTopUp: true, 
+          message: `اعتبار کیف پول کافی نیست. هزینه سفارش ${priceNum.toLocaleString('fa-IR')} تومان است و اعتبار شما ${user.walletBalance.toLocaleString('fa-IR')} تومان می‌باشد.` 
+        });
+      }
+
+      // Deduct balance and create transaction
+      user.walletBalance -= priceNum;
+      walletDeducted = true;
+
+      const newTrans = {
+        id: 3000 + transactions.length + 1,
+        userIdentifier,
+        amount: priceNum,
+        description: `خرید مستقیم محصول "${prod.title}" با کیف پول`,
+        type: 'debit',
+        createdAt: new Date().toISOString()
+      };
+      transactions.push(newTrans);
+    }
+
     const newOrder = {
       id: 1000 + orders.length + 1,
       productId: prod.id,
@@ -776,7 +1010,7 @@ async function startServer() {
       productType: prod.type,
       userIdentifier,
       price: prod.price,
-      status: 'pending',
+      status: walletDeducted ? 'completed' : 'pending',
       createdAt: new Date().toISOString(),
       additionalDetails: additionalDetails || ''
     };
@@ -784,7 +1018,7 @@ async function startServer() {
     saveDatabase();
 
     // Notify administrators via separate message bots
-    const adminMsg = `🔔 سفارش جدید ثبت شد!\n\n📦 محصول: ${prod.title}\n👥 خریدار: ${userIdentifier}\n💰 مبلغ: ${prod.price}\n📝 جزئیات: ${newOrder.additionalDetails}`;
+    const adminMsg = `🔔 سفارش جدید ثبت شد!\n\n📦 محصول: ${prod.title}\n👥 خریدار: ${userIdentifier}\n💰 مبلغ: ${prod.price}\n💳 روش پرداخت: ${paymentMethod === 'wallet' ? 'کیف پول (پرداخت موفق)' : 'کارت به کارت (دستی)'}\n📝 جزئیات: ${newOrder.additionalDetails}`;
     
     if (settings.adminTelegramChatId && settings.telegramToken) {
       botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', { chat_id: settings.adminTelegramChatId, text: adminMsg });
@@ -802,7 +1036,220 @@ async function startServer() {
       }
     }
 
-    res.json({ success: true, message: 'سفارش با موفقیت ثبت شد', order: newOrder });
+    res.json({ success: true, message: walletDeducted ? 'خرید با موفقیت از محل اعتبار کیف پول انجام شد' : 'سفارش با موفقیت ثبت شد', order: newOrder });
+  });
+
+  // --- API Routes: User Profile ---
+  app.get('/api/profile', (req, res) => {
+    const userIdentifier = req.query.userIdentifier as string;
+    if (!userIdentifier) return res.status(400).json({ success: false, message: 'شناسه کاربر الزامی است' });
+    
+    const cleanId = userIdentifier.trim().toLowerCase();
+    let user = users.find(u => 
+      (u.email && u.email.toLowerCase() === cleanId) || 
+      (u.phone && u.phone === cleanId) ||
+      (u.name && u.name.toLowerCase() === cleanId)
+    );
+    
+    if (!user) {
+      user = {
+        id: Date.now(),
+        name: 'کاربر گرامی',
+        email: userIdentifier.includes('@') ? userIdentifier : '',
+        phone: !userIdentifier.includes('@') ? userIdentifier : '',
+        address: '',
+        telegramUsername: '',
+        walletBalance: userIdentifier.trim().toLowerCase() === 'meh732@gmail.com' ? 500000 : 0
+      };
+    }
+    
+    if (user.walletBalance === undefined) {
+      user.walletBalance = user.email === 'meh732@gmail.com' ? 500000 : 0;
+    }
+    if (!user.address) user.address = '';
+    if (!user.telegramUsername) user.telegramUsername = '';
+    
+    res.json({ success: true, profile: user });
+  });
+
+  app.post('/api/profile/update', (req, res) => {
+    const { currentIdentifier, name, email, phone, password, address, telegramUsername } = req.body;
+    if (!currentIdentifier) return res.status(400).json({ success: false, message: 'شناسه فعلی معتبر نیست' });
+    
+    const cleanId = currentIdentifier.trim().toLowerCase();
+    let index = users.findIndex(u => 
+      (u.email && u.email.toLowerCase() === cleanId) || 
+      (u.phone && u.phone === cleanId) ||
+      (u.name && u.name.toLowerCase() === cleanId)
+    );
+    
+    if (index === -1) {
+      const newUser = {
+        id: Date.now(),
+        name: name || 'کاربر جدید',
+        email: email || '',
+        phone: phone || '',
+        password: password || '',
+        address: address || '',
+        telegramUsername: telegramUsername || '',
+        walletBalance: (email && email.toLowerCase() === 'meh732@gmail.com') ? 500000 : 0,
+        role: 'user',
+        createdAt: new Date()
+      };
+      users.push(newUser);
+      saveDatabase();
+      return res.json({ success: true, message: 'پروفایل با موفقیت ایجاد و ذخیره شد', profile: newUser });
+    }
+    
+    const existingUser = users[index];
+    existingUser.name = name || existingUser.name;
+    existingUser.email = email !== undefined ? email : existingUser.email;
+    existingUser.phone = phone !== undefined ? phone : existingUser.phone;
+    if (password) existingUser.password = password;
+    existingUser.address = address !== undefined ? address : existingUser.address;
+    existingUser.telegramUsername = telegramUsername !== undefined ? telegramUsername : existingUser.telegramUsername;
+    
+    saveDatabase();
+    res.json({ success: true, message: 'مشخصات مراجع با موفقیت بروزرسانی شد', profile: existingUser });
+  });
+
+  // --- API Routes: Wallet ---
+  app.get('/api/wallet/transactions', (req, res) => {
+    const userIdentifier = req.query.userIdentifier as string;
+    if (!userIdentifier) return res.status(400).json({ success: false, message: 'شناسه کاربر الزامی است' });
+    
+    const cleanId = userIdentifier.trim().toLowerCase();
+    const userTrans = transactions.filter(t => t.userIdentifier.trim().toLowerCase() === cleanId);
+    res.json({ success: true, transactions: userTrans });
+  });
+
+  app.post('/api/wallet/topup', (req, res) => {
+    const { userIdentifier, amount, cardHolderName } = req.body;
+    const buyAmt = parseInt(amount, 10);
+    if (!userIdentifier || isNaN(buyAmt) || buyAmt <= 0) {
+      return res.status(400).json({ success: false, message: 'مبلغ نامعتبر است' });
+    }
+    
+    const cleanId = userIdentifier.trim().toLowerCase();
+    let user = users.find(u => 
+      (u.email && u.email.toLowerCase() === cleanId) || 
+      (u.phone && u.phone === cleanId) ||
+      (u.name && u.name.toLowerCase() === cleanId)
+    );
+    
+    if (!user) {
+      user = {
+        id: Date.now(),
+        name: 'کاربر گرامی',
+        email: userIdentifier.includes('@') ? userIdentifier : '',
+        phone: !userIdentifier.includes('@') ? userIdentifier : '',
+        walletBalance: 0,
+        role: 'user',
+        createdAt: new Date()
+      };
+      users.push(user);
+    }
+    
+    if (user.walletBalance === undefined) {
+      user.walletBalance = user.email === 'meh732@gmail.com' ? 500000 : 0;
+    }
+    
+    user.walletBalance += buyAmt;
+    
+    const newTrans = {
+      id: 3000 + transactions.length + 1,
+      userIdentifier,
+      amount: buyAmt,
+      description: `افزایش اعتبار کیف پول${cardHolderName ? ` (توسط کارت ${cardHolderName})` : ''}`,
+      type: 'credit',
+      createdAt: new Date().toISOString()
+    };
+    
+    transactions.push(newTrans);
+    saveDatabase();
+    
+    res.json({ success: true, message: 'کیف پول شما با موفقیت شارژ شد!', walletBalance: user.walletBalance, transaction: newTrans });
+  });
+
+  // --- API Routes: Support Tickets ---
+  app.get('/api/tickets', (req, res) => {
+    const userIdentifier = req.query.userIdentifier as string;
+    if (!userIdentifier) return res.status(400).json({ success: false, message: 'شناسه کاربر الزامی است' });
+    
+    const cleanId = userIdentifier.trim().toLowerCase();
+    const userTickets = tickets.filter(t => t.userIdentifier.trim().toLowerCase() === cleanId);
+    res.json({ success: true, tickets: userTickets });
+  });
+
+  app.post('/api/tickets', (req, res) => {
+    const { userIdentifier, title, body, priority } = req.body;
+    if (!userIdentifier || !title || !body) {
+      return res.status(400).json({ success: false, message: 'اطلاعات تیکت ناقص است' });
+    }
+    
+    const cleanId = userIdentifier.trim().toLowerCase();
+    const newTicket = {
+      id: 4000 + tickets.length + 1,
+      userIdentifier,
+      title,
+      body,
+      status: 'open',
+      priority: priority || 'medium',
+      createdAt: new Date().toISOString(),
+      replies: [
+         { sender: 'user', text: body, createdAt: new Date().toISOString() },
+         { sender: 'admin', text: 'سلام کاربر عزیز. تیکت شما دریافت شد و به کارشناس مربوطه ارجاع گردید. ما سریعاً جزییات را بررسی کرده و همینجا پاسخ می‌دهیم.', createdAt: new Date().toISOString() }
+      ]
+    };
+    
+    tickets.push(newTicket);
+    saveDatabase();
+    
+    // Notify admin
+    const ticketNotifyMsg = `🎫 **تیکت پشتیبانی جدید در سایت!**\n\n👤 فرستنده: ${userIdentifier}\n🏷️ موضوع: ${title}\n🚨 اولویت: ${priority || 'high'}\n📝 متن تیکت: "${body}"`;
+    if (settings.adminTelegramChatId && settings.telegramToken) {
+      botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', { chat_id: settings.adminTelegramChatId, text: ticketNotifyMsg }).catch(err => console.error(err));
+    }
+    if (settings.adminBaleChatId && settings.baleToken) {
+      botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', { chat_id: settings.adminBaleChatId, text: ticketNotifyMsg }).catch(err => console.error(err));
+    }
+    
+    res.json({ success: true, message: 'تیکت با موفقیت ثبت شد', ticket: newTicket });
+  });
+
+  app.post('/api/tickets/:id/reply', (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    const { sender, text } = req.body;
+    if (!text) return res.status(400).json({ success: false, message: 'متن پاسخ خالی است' });
+    
+    const ticket = tickets.find(t => t.id === id);
+    if (!ticket) return res.status(404).json({ success: false, message: 'تیکت یافت نشد' });
+    
+    const reply = {
+      sender: sender || 'user',
+      text,
+      createdAt: new Date().toISOString()
+    };
+    
+    ticket.replies.push(reply);
+    ticket.status = sender === 'admin' ? 'answered' : 'user-replied';
+    
+    saveDatabase();
+    
+    // Auto smart response simulation
+    if (sender === 'user' || !sender) {
+      setTimeout(() => {
+        ticket.replies.push({
+          sender: 'admin',
+          text: 'پیام دریافت شد. دپارتمان بخش فنی در حال کار روی پاسخ یا انجام درخواست شماست. نتیجه نهایی به زودی در همین صفحه درج میگردد.',
+          createdAt: new Date().toISOString()
+        });
+        ticket.status = 'answered';
+        saveDatabase();
+      }, 1500);
+    }
+    
+    res.json({ success: true, ticket });
   });
 
   app.put('/api/orders/:id', (req, res) => {
@@ -858,6 +1305,17 @@ async function startServer() {
     }
     chat.messages.push({ sender: req.body.sender, text: req.body.text });
     saveDatabase();
+
+    // If customer sends a chat message, alert administrators instantly
+    if (req.body.sender === 'user') {
+      const adminChatAlertMsg = `💬 **تیکت/پیام پشتیبانی جدید در سایت!**\n\n👤 کاربر: ${req.params.userId}\n✉️ متن پیام: "${req.body.text}"\n\n💡 جهت پاسخگویی به پنل مدیریت سایت مراجعه کنید.`;
+      if (settings.adminTelegramChatId && settings.telegramToken) {
+        botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', { chat_id: settings.adminTelegramChatId, text: adminChatAlertMsg }).catch(err => console.error(err));
+      }
+      if (settings.adminBaleChatId && settings.baleToken) {
+        botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', { chat_id: settings.adminBaleChatId, text: adminChatAlertMsg }).catch(err => console.error(err));
+      }
+    }
 
     // If admin replies, forward the reply to user's Telegram or Bale bot dynamically!
     if (req.body.sender === 'admin') {

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { Product } from '../types';
 import { Link, useNavigate } from 'react-router-dom';
+import ThemeSwitcher from '../components/ThemeSwitcher';
 
 const IconMap: Record<string, React.ReactNode> = {
   Apple: <Apple className="w-8 h-8 text-white" />,
@@ -17,10 +18,34 @@ const IconMap: Record<string, React.ReactNode> = {
   Smartphone: <Smartphone className="w-8 h-8 text-orange-400" />
 };
 
+export function formatPrice(priceVal: string | number): string {
+  if (!priceVal) return '';
+  const str = String(priceVal);
+  const normalized = str.replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
+  const cleanNumStr = normalized.replace(/[^\d]/g, '');
+  if (!cleanNumStr) return str;
+
+  const num = parseInt(cleanNumStr, 10);
+  const formatted = num.toLocaleString('fa-IR');
+  
+  if (str.includes('از') || str.includes('شروع')) {
+    return `از ${formatted} تومان`;
+  }
+  return `${formatted} تومان`;
+}
+
 export default function Home() {
   const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [authTab, setAuthTab] = useState<'login' | 'register'>('login');
+  const [passwordLogin, setPasswordLogin] = useState(true);
+  const [loginIdentifier, setLoginIdentifier] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [registerName, setRegisterName] = useState('');
+  const [registerEmail, setRegisterEmail] = useState('');
+  const [registerPhone, setRegisterPhone] = useState('');
+  const [registerPassword, setRegisterPassword] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [loginMethod, setLoginMethod] = useState<'email' | 'phone'>('email');
@@ -46,8 +71,9 @@ export default function Home() {
   const [orderSuccess, setOrderSuccess] = useState<any | null>(null);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
 
-  const isLogged = !!localStorage.getItem('userEmail') || !!localStorage.getItem('userPhone');
-  const userIdentifier = localStorage.getItem('userEmail') || localStorage.getItem('userPhone') || '';
+  const isLogged = !!localStorage.getItem('userEmail') || !!localStorage.getItem('userPhone') || !!localStorage.getItem('userName');
+  const userIdentifier = localStorage.getItem('userName') || localStorage.getItem('userEmail') || localStorage.getItem('userPhone') || 'کاربر عزیز';
+  const activeUser = localStorage.getItem('userEmail') || localStorage.getItem('userPhone') || localStorage.getItem('userName') || '';
 
   useEffect(() => {
     fetch('/api/products')
@@ -119,6 +145,92 @@ export default function Home() {
       } else {
         showToast(res.message || 'کد وارد شده نامعتبر است', 'error');
       }
+    });
+  };
+
+  const handleRegister = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!registerName.trim()) {
+      showToast('نام و نام خانوادگی الزامی است', 'error');
+      return;
+    }
+    if (!registerPassword) {
+      showToast('کلمه عبور الزامی است', 'error');
+      return;
+    }
+    if (!registerEmail.trim() && !registerPhone.trim()) {
+      showToast('پر کردن حداقل یکی از موارد ایمیل یا شماره موبایل الزامی است', 'error');
+      return;
+    }
+
+    fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: registerName,
+        email: registerEmail,
+        phone: registerPhone,
+        password: registerPassword
+      })
+    })
+    .then(r => r.json())
+    .then(res => {
+      if (res.success) {
+        showToast('ثبت نام شما با موفقیت انجام شد! اکنون میتوانید وارد شوید.', 'success');
+        setAuthTab('login');
+        setPasswordLogin(true);
+        setLoginIdentifier(registerEmail || registerPhone || '');
+        setLoginPassword(registerPassword);
+        // Clean fields
+        setRegisterName('');
+        setRegisterEmail('');
+        setRegisterPhone('');
+        setRegisterPassword('');
+      } else {
+        showToast(res.message || 'خطا در ثبت نام', 'error');
+      }
+    })
+    .catch(() => {
+      showToast('خطا در ارتباط با سرور', 'error');
+    });
+  };
+
+  const handleLoginWithPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loginIdentifier.trim() || !loginPassword) {
+      showToast('شناسه ورود و کلمه عبور الزامی است', 'error');
+      return;
+    }
+
+    fetch('/api/auth/login-with-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        identifier: loginIdentifier,
+        password: loginPassword
+      })
+    })
+    .then(r => r.json())
+    .then(res => {
+      if (res.success) {
+        if (res.user.email) localStorage.setItem('userEmail', res.user.email);
+        if (res.user.phone) localStorage.setItem('userPhone', res.user.phone);
+        if (res.user.name) localStorage.setItem('userName', res.user.name);
+
+        showToast(`خوش آمدید ${res.user.name || 'کاربر گرامی'}`, 'success');
+        setIsLoginModalOpen(false);
+        setLoginIdentifier('');
+        setLoginPassword('');
+        
+        if (!selectedProduct) {
+          navigate('/dashboard');
+        }
+      } else {
+        showToast(res.message || 'مشخصات ورود یا کلمه عبور نادرست است', 'error');
+      }
+    })
+    .catch(() => {
+      showToast('خطا در ارتباط با سرور', 'error');
     });
   };
 
@@ -214,13 +326,21 @@ export default function Home() {
               <span className="hidden sm:inline">ورود مدیران</span>
             </Link>
 
+            <ThemeSwitcher />
+
             {isLogged ? (
-              <button onClick={() => navigate('/dashboard')} className="bg-indigo-500 hover:bg-indigo-600 text-white px-5 py-2.5 rounded-full font-medium text-sm transition-all shadow-md shadow-indigo-500/10 flex items-center gap-2">
+              <button 
+                onClick={() => navigate('/dashboard')} 
+                className="bg-indigo-500 hover:bg-indigo-600 text-white px-5 py-2.5 rounded-full font-medium text-sm transition-all shadow-md shadow-indigo-500/10 flex items-center gap-2 cursor-pointer"
+              >
                 <User className="w-4 h-4" />
-                <span>پنل من ({userIdentifier.split('@')[0]})</span>
+                <span>پنل من ({userIdentifier})</span>
               </button>
             ) : (
-              <button onClick={() => setIsLoginModalOpen(true)} className="bg-white text-black px-5 py-2.5 rounded-full font-medium text-sm hover:bg-zinc-200 transition-colors flex items-center gap-2">
+              <button 
+                onClick={() => setIsLoginModalOpen(true)} 
+                className="bg-white text-black px-5 py-2.5 rounded-full font-medium text-sm hover:bg-zinc-200 transition-colors flex items-center gap-2 cursor-pointer"
+              >
                 <User className="w-4 h-4" />
                 ورود / عضویت
               </button>
@@ -229,7 +349,7 @@ export default function Home() {
         </div>
       </nav>
 
-      {/* Login Modal */}
+      {/* Login / Register Modal */}
       <AnimatePresence>
         {isLoginModalOpen && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm">
@@ -245,85 +365,219 @@ export default function Home() {
               >
                 ✕
               </button>
-              <div className="text-center mb-8">
-                <h3 className="text-2xl font-bold mb-2">ورود به حساب</h3>
-                <p className="text-sm text-zinc-400">برای پیگیری سفارشات و پشتیبانی وارد شوید</p>
-              </div>
-              
-              <form onSubmit={otpSent ? handleVerifyOtp : handleSendOtp} className="space-y-4">
-                {!otpSent ? (
-                  <>
-                    {enableMobileLogin && (
-                      <div className="flex bg-zinc-900 rounded-xl p-1 mb-6">
-                        <button type="button" onClick={() => setLoginMethod('email')} className={`flex-1 py-2 text-sm rounded-lg transition-colors ${loginMethod === 'email' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}>ایمیل</button>
-                        <button type="button" onClick={() => setLoginMethod('phone')} className={`flex-1 py-2 text-sm rounded-lg transition-colors ${loginMethod === 'phone' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}>موبایل</button>
-                      </div>
-                    )}
 
-                    {loginMethod === 'email' ? (
+              {/* Tab Selector */}
+              <div className="flex bg-zinc-900 rounded-xl p-1 mb-6">
+                <button 
+                  type="button" 
+                  onClick={() => { setAuthTab('login'); setOtpSent(false); }} 
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${authTab === 'login' ? 'bg-indigo-600 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                >
+                  ورود به حساب
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => { setAuthTab('register'); setOtpSent(false); }} 
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${authTab === 'register' ? 'bg-indigo-600 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                >
+                  عضویت جدید
+                </button>
+              </div>
+
+              {authTab === 'login' ? (
+                <>
+                  <div className="text-center mb-6">
+                    <h3 className="text-xl font-bold mb-1">ورود به حساب کاربری</h3>
+                    <p className="text-xs text-zinc-400">به یکی از روش‌های زیر وارد شوید:</p>
+                  </div>
+
+                  <div className="flex justify-between items-center mb-4 pb-2 border-b border-zinc-900">
+                    <span className="text-[10px] text-zinc-400 font-medium">روش احراز هویت:</span>
+                    <button 
+                      type="button" 
+                      onClick={() => { setPasswordLogin(!passwordLogin); setOtpSent(false); }}
+                      className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold"
+                    >
+                      {passwordLogin ? '🔑 ورود سریع بدون رمز (OTP)' : '🔒 ورود با کلمه عبور'}
+                    </button>
+                  </div>
+
+                  {passwordLogin ? (
+                    <form onSubmit={handleLoginWithPassword} className="space-y-4">
                       <div>
+                        <label className="text-[10px] text-zinc-400 block mb-1">ایمیل یا شماره موبایل:</label>
                         <input 
-                          type="email" 
-                          placeholder="ایمیل خود را وارد کنید..."
-                          value={email}
-                          onChange={e => setEmail(e.target.value)}
+                          type="text" 
+                          placeholder="example@mail.com یا 09121234567"
+                          value={loginIdentifier}
+                          onChange={e => setLoginIdentifier(e.target.value)}
                           dir="ltr"
-                          className="w-full bg-zinc-900 border border-zinc-805/40 text-white focus:border-indigo-500 rounded-xl px-4 py-3 text-center outline-none transition-colors"
+                          required
+                          className="w-full bg-zinc-900 border border-zinc-800 text-white focus:border-indigo-500 rounded-xl px-4 py-2.5 text-center text-sm outline-none transition-colors"
                         />
                       </div>
-                    ) : (
                       <div>
+                        <label className="text-[10px] text-zinc-400 block mb-1">کلمه عبور شما:</label>
                         <input 
-                          type="tel" 
-                          placeholder="موبایل (مثال: 09121234567)"
-                          value={phone}
-                          onChange={e => setPhone(e.target.value)}
+                          type="password" 
+                          placeholder="••••••••"
+                          value={loginPassword}
+                          onChange={e => setLoginPassword(e.target.value)}
                           dir="ltr"
-                          className="w-full bg-zinc-900 border border-zinc-800 focus:border-indigo-500 rounded-xl px-4 py-3 text-center outline-none transition-colors"
+                          required
+                          className="w-full bg-zinc-900 border border-zinc-850 text-white focus:border-indigo-500 rounded-xl px-4 py-2.5 text-center text-sm outline-none transition-colors"
                         />
                       </div>
-                    )}
-                    <button 
-                      type="submit"
-                      disabled={loginMethod === 'email' ? !email.includes('@') : phone.length < 10}
-                      className="w-full bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white rounded-xl py-3 font-medium transition-colors cursor-pointer"
-                    >
-                      دریافت کد تایید
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <div>
-                      <p className="text-sm text-center mb-3">کد تایید به {loginMethod === 'email' ? 'ایمیل' : 'پیام‌رسان'} ارسال شد.</p>
-                      <input 
-                        type="text" 
-                        placeholder="کد تایید..."
-                        value={otpCode}
-                        onChange={e => setOtpCode(e.target.value)}
-                        dir="ltr"
-                        className="w-full bg-zinc-900 border border-zinc-800 focus:border-indigo-500 rounded-xl px-4 py-3 text-center tracking-widest outline-none transition-colors"
-                      />
-                    </div>
-                    <button 
-                      type="submit"
-                      disabled={otpCode.length < 4}
-                      className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white rounded-xl py-3 font-medium transition-colors cursor-pointer"
-                    >
-                      ورود به حساب
-                    </button>
-                    <button 
-                      type="button"
-                      onClick={() => setOtpSent(false)}
-                      className="w-full text-zinc-400 hover:text-white text-sm mt-2 cursor-pointer"
-                    >
-                      تغییر {loginMethod === 'email' ? 'ایمیل' : 'شماره'}
-                    </button>
-                  </>
-                )}
-              </form>
-              
-              <p className="text-xs text-zinc-500 text-center mt-6">
-               شما همچنین میتوانید مستقیما از طریق ربات‌های تلگرام و بله وارد سایت شوید.
+                      <button 
+                        type="submit"
+                        className="w-full bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl py-3 text-xs font-bold transition-colors cursor-pointer"
+                      >
+                        ورود مطمئن به حساب
+                      </button>
+                    </form>
+                  ) : (
+                    <form onSubmit={otpSent ? handleVerifyOtp : handleSendOtp} className="space-y-4">
+                      {!otpSent ? (
+                        <>
+                          {enableMobileLogin && (
+                            <div className="flex bg-zinc-900 rounded-xl p-1 mb-4">
+                              <button type="button" onClick={() => setLoginMethod('email')} className={`flex-1 py-1.5 text-xs rounded-lg transition-colors ${loginMethod === 'email' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}>ایمیل</button>
+                              <button type="button" onClick={() => setLoginMethod('phone')} className={`flex-1 py-1.5 text-xs rounded-lg transition-colors ${loginMethod === 'phone' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}>موبایل</button>
+                            </div>
+                          )}
+
+                          {loginMethod === 'email' ? (
+                            <div>
+                              <input 
+                                type="email" 
+                                placeholder="ایمیل خود را وارد کنید..."
+                                value={email}
+                                onChange={e => setEmail(e.target.value)}
+                                dir="ltr"
+                                className="w-full bg-zinc-900 border border-zinc-850 text-white focus:border-indigo-500 rounded-xl px-4 py-2.5 text-center text-xs outline-none transition-colors"
+                              />
+                            </div>
+                          ) : (
+                            <div>
+                              <input 
+                                type="tel" 
+                                placeholder="موبایل (مثال: 09121234567)"
+                                value={phone}
+                                onChange={e => setPhone(e.target.value)}
+                                dir="ltr"
+                                className="w-full bg-zinc-900 border border-zinc-800 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-center text-xs outline-none transition-colors"
+                              />
+                            </div>
+                          )}
+                          <button 
+                            type="submit"
+                            disabled={loginMethod === 'email' ? !email.includes('@') : phone.length < 10}
+                            className="w-full bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white rounded-xl py-3 text-xs font-bold transition-colors cursor-pointer"
+                          >
+                            دریافت کد تایید یکبار مصرف
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <div>
+                            <p className="text-xs text-center mb-3">کد تایید به {loginMethod === 'email' ? 'ایمیل' : 'پیام‌رسان'} ارسال شد.</p>
+                            <input 
+                              type="text" 
+                              placeholder="کد تایید..."
+                              value={otpCode}
+                              onChange={e => setOtpCode(e.target.value)}
+                              dir="ltr"
+                              className="w-full bg-zinc-900 border border-zinc-800 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-center tracking-widest outline-none transition-colors"
+                            />
+                          </div>
+                          <button 
+                            type="submit"
+                            disabled={otpCode.length < 4}
+                            className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white rounded-xl py-3 text-xs font-bold transition-colors cursor-pointer"
+                          >
+                            ورود به حساب
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={() => setOtpSent(false)}
+                            className="w-full text-zinc-400 hover:text-white text-xs mt-2 cursor-pointer"
+                          >
+                            تغییر {loginMethod === 'email' ? 'ایمیل' : 'شماره'}
+                          </button>
+                        </>
+                      )}
+                    </form>
+                  )}
+                </>
+              ) : (
+                <form onSubmit={handleRegister} className="space-y-4">
+                  <div className="text-center mb-4">
+                    <h3 className="text-xl font-bold mb-1">عضویت زودهنگام در سایت</h3>
+                    <p className="text-[10px] text-zinc-400">تنها با پر کردن فیلدهای زیر حساب شما آماده میگردد</p>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-zinc-400 block mb-1">نام و نام خانوادگی:</label>
+                    <input 
+                      type="text" 
+                      placeholder="امیر رضایی"
+                      value={registerName}
+                      onChange={e => setRegisterName(e.target.value)}
+                      required
+                      className="w-full bg-zinc-900 border border-zinc-800 text-white focus:border-indigo-500 rounded-xl px-4 py-2 text-xs outline-none transition-colors"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-zinc-400 block mb-1">آدرس ایمیل (اختیاری):</label>
+                    <input 
+                      type="email" 
+                      placeholder="yourname@gmail.com"
+                      value={registerEmail}
+                      onChange={e => setRegisterEmail(e.target.value)}
+                      dir="ltr"
+                      className="w-full bg-zinc-900 border border-zinc-800 text-white focus:border-indigo-500 rounded-xl px-4 py-2 text-xs outline-none transition-colors"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-zinc-400 block mb-1">شماره موبایل (اختیاری):</label>
+                    <input 
+                      type="tel" 
+                      placeholder="09121234567"
+                      value={registerPhone}
+                      onChange={e => setRegisterPhone(e.target.value)}
+                      dir="ltr"
+                      className="w-full bg-zinc-900 border border-zinc-800 text-white focus:border-indigo-500 rounded-xl px-4 py-2 text-xs outline-none transition-colors"
+                    />
+                  </div>
+
+                  <p className="text-[9px] text-indigo-300">💡 وارد کردن حداقل یکی از موارد فوق (ایمیل یا موبایل) کافیست.</p>
+
+                  <div>
+                    <label className="text-[10px] text-zinc-400 block mb-1">تعیین کلمه عبور:</label>
+                    <input 
+                      type="password" 
+                      placeholder="کلمه عبور دلخواه..."
+                      value={registerPassword}
+                      onChange={e => setRegisterPassword(e.target.value)}
+                      dir="ltr"
+                      required
+                      className="w-full bg-zinc-900 border border-zinc-800 text-white focus:border-indigo-500 rounded-xl px-4 py-2 text-xs outline-none transition-colors"
+                    />
+                  </div>
+
+                  <button 
+                    type="submit"
+                    className="w-full bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl py-2.5 text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    ثبت نام و شروع خرید
+                  </button>
+                </form>
+              )}
+
+              <p className="text-[10px] text-zinc-500 text-center mt-6">
+                 شما همچنین میتوانید با استارت ربات‌های تلگرام و بله مستقیماً وارد سایت شوید.
               </p>
             </motion.div>
           </div>
@@ -381,7 +635,7 @@ export default function Home() {
                   <h3 className="text-xl font-bold mb-2 text-zinc-100 group-hover:text-indigo-300 transition-colors">{prod.title}</h3>
                   <p className="text-zinc-400 text-sm mb-6 h-10 line-clamp-2">{prod.desc}</p>
                   <div className="flex items-center justify-between mt-auto pt-4 border-t border-zinc-800/50">
-                    <span className="text-indigo-400 font-bold">{prod.price}</span>
+                    <span className="text-indigo-400 font-bold">{formatPrice(prod.price)}</span>
                     <button className="w-10 h-10 rounded-full bg-zinc-900 group-hover:bg-indigo-500 border border-zinc-800 group-hover:border-indigo-400 flex items-center justify-center transition-colors">
                       <ChevronLeft className="w-5 h-5 text-white" />
                     </button>
@@ -418,7 +672,7 @@ export default function Home() {
                   <h3 className="text-xl font-bold mb-2 text-zinc-100 group-hover:text-purple-300 transition-colors">{prod.title}</h3>
                   <p className="text-zinc-400 text-sm mb-6 flex-grow line-clamp-3">{prod.desc}</p>
                   <div className="flex items-center justify-between mt-auto pt-4 border-t border-zinc-800/50">
-                    <span className="text-zinc-300 font-medium text-sm">شروع قیمت: {prod.price}</span>
+                    <span className="text-zinc-300 font-medium text-sm">شروع قیمت: {formatPrice(prod.price)}</span>
                     <button className="text-sm text-purple-400 font-medium hover:text-purple-300 flex items-center gap-1 group-hover:translate-x-[-4px] transition-transform">
                       <span>مشاوره و سفارش</span> 
                       <ChevronLeft className="w-4 h-4" />
@@ -468,12 +722,29 @@ export default function Home() {
                   </div>
 
                   {/* Description */}
-                  <div className="mb-6 bg-zinc-900/30 border border-zinc-800/50 p-4 rounded-xl">
+                  <div className="mb-4 bg-zinc-900/30 border border-zinc-800/50 p-4 rounded-xl">
                     <h4 className="text-sm text-zinc-400 mb-2 flex items-center gap-1.5 font-medium">
                       <HelpCircle className="w-4 h-4 text-zinc-400" /> توضیحات و جزئیات محصول:
                     </h4>
                     <p className="text-sm text-zinc-300 leading-relaxed font-normal">{selectedProduct.desc}</p>
                   </div>
+
+                  {/* Custom Specs Display */}
+                  {selectedProduct.specs && (
+                    <div className="mb-4 bg-indigo-500/5 border border-indigo-500/10 p-4 rounded-xl">
+                      <h4 className="text-xs text-indigo-400 mb-2 flex items-center gap-1.5 font-semibold">
+                        ✨ ویژگی‌های تعریف شده ادمین:
+                      </h4>
+                      <ul className="space-y-1.5">
+                        {selectedProduct.specs.split('\n').filter(Boolean).map((spec, sidx) => (
+                          <li key={sidx} className="text-xs text-zinc-300 flex items-start gap-1 justify-start">
+                            <span className="text-indigo-400 mt-0.5">•</span>
+                            <span>{spec.trim()}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
 
                   {/* Product Specific Menu Fields */}
                   {selectedProduct.type === 'account' ? (
@@ -565,8 +836,10 @@ export default function Home() {
                   {/* Summary / Price Box */}
                   <div className="flex items-center justify-between p-4 bg-zinc-900/40 rounded-xl border border-zinc-800/60 mb-6">
                     <span className="text-sm text-zinc-400">مجموع هزینه حدودی:</span>
-                    <span className="text-xl font-bold text-emerald-400">
-                      {selectedProduct.type === 'account' ? `${(parseInt(selectedProduct.price.replace(/[^\d]/g, '')) * quantity).toLocaleString('fa-IR')} تومان` : selectedProduct.price}
+                    <span className="text-xl font-bold text-emerald-400 font-sans">
+                      {selectedProduct.type === 'account' 
+                        ? formatPrice(parseInt(selectedProduct.price.replace(/[^\d]/g, '') || '0') * quantity) 
+                        : formatPrice(selectedProduct.price)}
                     </span>
                   </div>
 

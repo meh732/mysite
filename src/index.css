@@ -9,3 +9,130 @@
     @apply bg-zinc-900/50 backdrop-blur-md border border-zinc-800 rounded-2xl;
   }
 }
+
+/* Custom Variables for Seamless Theme Swappings */
+:root {
+  --bg-main: #09090b;
+  --bg-card: rgba(24, 24, 27, 0.5);
+  --bg-card-solid: #18181b;
+  --border-color: rgba(39, 39, 42, 0.6);
+  --text-primary: #f4f4f5;
+  --text-secondary: #a1a1aa;
+  --accent-color: #6366f1;
+}
+
+/* Light Theme Variables and Class Overrides */
+html.light, body.light, .light {
+  --bg-main: #f5f6fa !important;
+  --bg-card: rgba(255, 255, 255, 0.82) !important;
+  --bg-card-solid: #ffffff !important;
+  --border-color: #e4e4e7 !important;
+  --text-primary: #121214 !important;
+  --text-secondary: #3f3f46 !important;
+  --accent-color: #4f46e5 !important;
+}
+
+/* Global Transition */
+body {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Adaptive overrides for structural classes when in light mode */
+.light body {
+  background-color: var(--bg-main) !important;
+  color: var(--text-primary) !important;
+}
+.light .bg-zinc-950, .light .bg-black {
+  background-color: var(--bg-main) !important;
+}
+.light .bg-zinc-900 {
+  background-color: var(--bg-card-solid) !important;
+}
+.light .bg-zinc-900\/30 {
+  background-color: rgba(255, 255, 255, 0.4) !important;
+}
+.light .bg-zinc-900\/50 {
+  background-color: rgba(255, 255, 255, 0.6) !important;
+}
+.light .bg-zinc-850 {
+  background-color: #f1f3f5 !important;
+}
+.light .glass-panel {
+  background-color: var(--bg-card) !important;
+  border-color: var(--border-color) !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05) !important;
+}
+.light .border-zinc-800 {
+  border-color: var(--border-color) !important;
+}
+.light .border-zinc-805\/40, .light .border-zinc-850 {
+  border-color: #e4e4e7 !important;
+}
+.light .text-white, .light .text-zinc-100 {
+  color: var(--text-primary) !important;
+}
+.light .text-zinc-200, .light .text-zinc-300, .light .text-zinc-350 {
+  color: var(--text-secondary) !important;
+}
+.light .text-zinc-400 {
+  color: #4b5563 !important; /* zinc-600 */
+}
+.light .text-zinc-500 {
+  color: #6b7280 !important; /* zinc-500 */
+}
+.light .bg-zinc-950\/20 {
+  background-color: rgba(0, 0, 0, 0.02) !important;
+}
+.light .bg-indigo-500\/10 {
+  background-color: rgba(79, 70, 229, 0.08) !important;
+  color: #4f46e5 !important;
+}
+.light .bg-emerald-500\/10 {
+  background-color: rgba(16, 185, 129, 0.08) !important;
+  color: #059669 !important;
+}
+.light .text-emerald-400 {
+  color: #0d9488 !important;
+}
+.light .text-indigo-400 {
+  color: #4f46e5 !important;
+}
+.light .text-zinc-300 {
+  color: #27272a !important;
+}
+.light input {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  border-color: #d4d4d8 !important;
+}
+.light input:focus {
+  border-color: #4f46e5 !important;
+}
+.light select {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  border-color: #d4d4d8 !important;
+}
+.light textarea {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  border-color: #d4d4d8 !important;
+}
+.light .bg-white {
+  background-color: #1a1a1e !important;
+  color: #ffffff !important;
+}
+.light .bg-white.text-black {
+  background-color: #4f46e5 !important;
+  color: #ffffff !important;
+}
+.light .bg-white.text-black:hover {
+  background-color: #4338ca !important;
+}
+.light .text-black {
+  color: #ffffff !important;
+}
+.light .hover\:bg-zinc-200:hover {
+  background-color: rgba(0, 0, 0, 0.05) !important;
+}
+
