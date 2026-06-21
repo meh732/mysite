@@ -3,10 +3,10 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   LayoutDashboard, Users, ShoppingBag, Settings, Bot, Shield, LogOut, 
   Activity, Database, MessageSquare, Plus, Trash2, Edit2, CheckCircle, 
-  X, ToggleLeft, ToggleRight, Loader2, Eye, EyeOff, AlertCircle, ShoppingCart, RefreshCw, Sparkles
+  X, ToggleLeft, ToggleRight, Loader2, Eye, EyeOff, AlertCircle, ShoppingCart, RefreshCw, Sparkles, Folder, GitMerge, FileText
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { Product, Order } from '../types';
+import { Product, Order, Group, SubGroup } from '../types';
 
 export default function Admin() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -28,14 +28,23 @@ export default function Admin() {
     enableTelegramJoinCheck: false,
     telegramJoinChannel: '',
     enableBaleJoinCheck: false,
-    baleJoinChannel: ''
+    baleJoinChannel: '',
+    socialInstagram: '',
+    socialTelegram: '',
+    socialWhatsapp: '',
+    contactPhone: '',
+    contactEmail: '',
+    contactAddress: '',
+    heroVideoUrl: ''
   });
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [subGroups, setSubGroups] = useState<SubGroup[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   // Sub tab inside "سفارشات/محصولات"
-  const [productsSubTab, setProductsSubTab] = useState<'products' | 'orders'>('products');
+  const [productsSubTab, setProductsSubTab] = useState<'products' | 'orders' | 'groups' | 'subgroups'>('products');
 
   // --- Product CRUD Form / Modal State ---
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -49,6 +58,24 @@ export default function Admin() {
   const [formIcon, setFormIcon] = useState('Bot');
   const [formActive, setFormActive] = useState(true);
   const [formSpecs, setFormSpecs] = useState('');
+  const [formGroupId, setFormGroupId] = useState<number | undefined>(undefined);
+  const [formSubGroupId, setFormSubGroupId] = useState<number | undefined>(undefined);
+  const [formImage, setFormImage] = useState('');
+
+  // --- Group CRUD Dialog states ---
+  const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+  const [editingGroup, setEditingGroup] = useState<Group | null>(null);
+  const [groupFormTitle, setGroupFormTitle] = useState('');
+  const [groupFormImage, setGroupFormImage] = useState('');
+  const [groupFormActive, setGroupFormActive] = useState(true);
+
+  // --- SubGroup CRUD Dialog states ---
+  const [isSubGroupModalOpen, setIsSubGroupModalOpen] = useState(false);
+  const [editingSubGroup, setEditingSubGroup] = useState<SubGroup | null>(null);
+  const [subGroupFormGroupId, setSubGroupFormGroupId] = useState<number>(0);
+  const [subGroupFormTitle, setSubGroupFormTitle] = useState('');
+  const [subGroupFormImage, setSubGroupFormImage] = useState('');
+  const [subGroupFormActive, setSubGroupFormActive] = useState(true);
 
   // Login State
   const [username, setUsername] = useState('');
@@ -66,8 +93,10 @@ export default function Admin() {
     const p1 = fetch('/api/admin/settings').then(r => r.json()).then(d => setAdminSettings(d));
     const p2 = fetch('/api/products').then(r => r.json()).then(d => setProducts(d));
     const p3 = fetch('/api/orders').then(r => r.json()).then(d => setOrders(d));
+    const p4 = fetch('/api/groups').then(r => r.json()).then(d => setGroups(d));
+    const p5 = fetch('/api/subgroups').then(r => r.json()).then(d => setSubGroups(d));
     
-    Promise.all([p1, p2, p3])
+    Promise.all([p1, p2, p3, p4, p5])
       .catch((err) => console.error("Error fetching admin metrics:", err))
       .finally(() => setIsLoading(false));
   };
@@ -122,6 +151,9 @@ export default function Admin() {
     setFormIcon('Bot');
     setFormActive(true);
     setFormSpecs('');
+    setFormGroupId(groups[0]?.id || undefined);
+    setFormSubGroupId(undefined);
+    setFormImage('');
     setIsProductModalOpen(true);
   };
 
@@ -135,6 +167,9 @@ export default function Admin() {
     setFormIcon(prod.icon);
     setFormActive(prod.active !== false);
     setFormSpecs(prod.specs || '');
+    setFormGroupId(prod.groupId);
+    setFormSubGroupId(prod.subGroupId);
+    setFormImage(prod.image || '');
     setIsProductModalOpen(true);
   };
 
@@ -153,7 +188,10 @@ export default function Admin() {
       category: formCategory,
       icon: formIcon,
       active: formActive,
-      specs: formSpecs
+      specs: formSpecs,
+      groupId: formGroupId ? Number(formGroupId) : undefined,
+      subGroupId: formSubGroupId ? Number(formSubGroupId) : undefined,
+      image: formImage
     };
 
     if (editingProduct) {
@@ -207,6 +245,155 @@ export default function Admin() {
       } else {
         alert(res.message || 'خطا در حذف محصول');
       }
+    });
+  };
+
+  // --- Group CRUD Actions ---
+  const openNewGroupModal = () => {
+    setEditingGroup(null);
+    setGroupFormTitle('');
+    setGroupFormImage('');
+    setGroupFormActive(true);
+    setIsGroupModalOpen(true);
+  };
+
+  const openEditGroupModal = (g: Group) => {
+    setEditingGroup(g);
+    setGroupFormTitle(g.title);
+    setGroupFormImage(g.image);
+    setGroupFormActive(g.active !== false);
+    setIsGroupModalOpen(true);
+  };
+
+  const handleSaveGroup = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!groupFormTitle) {
+      alert('وارد کردن عنوان گروه الزامی است.');
+      return;
+    }
+    const payload = { title: groupFormTitle, image: groupFormImage, active: groupFormActive };
+
+    const url = editingGroup ? `/api/groups/${editingGroup.id}` : '/api/groups';
+    const method = editingGroup ? 'PUT' : 'POST';
+
+    fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(res => {
+      if (res.success) {
+        alert(editingGroup ? 'گروه با موفقیت ویرایش شد.' : 'گروه جدید با موفقیت اضافه شد.');
+        setIsGroupModalOpen(false);
+        loadAllData();
+      } else {
+        alert(res.message || 'خطا در ثبت اطلاعات گروه');
+      }
+    });
+  };
+
+  const handleDeleteGroup = (id: number) => {
+    if (!confirm('آیا مطمئن هستید که می‌خواهید این گروه را حذف کنید؟ با حذف گروه، ارتباط زیرمجموعه‌ها ممکن است گسیخته شود.')) return;
+    fetch(`/api/groups/${id}`, { method: 'DELETE' })
+      .then(r => r.json())
+      .then(res => {
+        if (res.success) {
+          alert('گروه با موفقیت حذف شد.');
+          loadAllData();
+        } else {
+          alert(res.message || 'خطا در حذف گروه');
+        }
+      });
+  };
+
+  const toggleGroupActive = (g: Group) => {
+    fetch(`/api/groups/${g.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active: !g.active })
+    })
+    .then(r => r.json())
+    .then(res => {
+      if (res.success) loadAllData();
+    });
+  };
+
+  // --- SubGroup CRUD Actions ---
+  const openNewSubGroupModal = () => {
+    setEditingSubGroup(null);
+    setSubGroupFormGroupId(groups[0]?.id || 0);
+    setSubGroupFormTitle('');
+    setSubGroupFormImage('');
+    setSubGroupFormActive(true);
+    setIsSubGroupModalOpen(true);
+  };
+
+  const openEditSubGroupModal = (sg: SubGroup) => {
+    setEditingSubGroup(sg);
+    setSubGroupFormGroupId(sg.groupId);
+    setSubGroupFormTitle(sg.title);
+    setSubGroupFormImage(sg.image);
+    setSubGroupFormActive(sg.active !== false);
+    setIsSubGroupModalOpen(true);
+  };
+
+  const handleSaveSubGroup = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!subGroupFormTitle || !subGroupFormGroupId) {
+      alert('وارد کردن عنوان و انتخاب گروه والد الزامی است.');
+      return;
+    }
+    const payload = { 
+      groupId: Number(subGroupFormGroupId), 
+      title: subGroupFormTitle, 
+      image: subGroupFormImage, 
+      active: subGroupFormActive 
+    };
+
+    const url = editingSubGroup ? `/api/subgroups/${editingSubGroup.id}` : '/api/subgroups';
+    const method = editingSubGroup ? 'PUT' : 'POST';
+
+    fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(res => {
+      if (res.success) {
+        alert(editingSubGroup ? 'زیرمجموعه با موفقیت ویرایش شد.' : 'زیرمجموعه جدید با موفقیت اضافه شد.');
+        setIsSubGroupModalOpen(false);
+        loadAllData();
+      } else {
+        alert(res.message || 'خطا در ثبت اطلاعات زیرمجموعه');
+      }
+    });
+  };
+
+  const handleDeleteSubGroup = (id: number) => {
+    if (!confirm('آیا مطمئن هستید که می‌خواهید این زیرمجموعه را حذف کنید؟')) return;
+    fetch(`/api/subgroups/${id}`, { method: 'DELETE' })
+      .then(r => r.json())
+      .then(res => {
+        if (res.success) {
+          alert('زیرمجموعه با موفقیت حذف شد.');
+          loadAllData();
+        } else {
+          alert(res.message || 'خطا در حذف زیرمجموعه');
+        }
+      });
+  };
+
+  const toggleSubGroupActive = (sg: SubGroup) => {
+    fetch(`/api/subgroups/${sg.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active: !sg.active })
+    })
+    .then(r => r.json())
+    .then(res => {
+      if (res.success) loadAllData();
     });
   };
 
@@ -430,8 +617,8 @@ export default function Admin() {
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-zinc-400 pl-4">{ord.price}</span>
                       {ord.status === 'completed' && <span className="text-xs text-emerald-400 bg-emerald-400/5 border border-emerald-500/20 px-3 py-1 rounded-full font-bold">تکمیل شده</span>}
-                      {ord.status === 'canceled' && <span className="text-xs text-red-400 bg-red-450/5 border border-red-500/20 px-3 py-1 rounded-full font-bold">لغو شده</span>}
-                      {ord.status === 'pending' && <span className="text-xs text-amber-400 bg-amber-400/5 border border-amber-500/20 px-3 py-1 rounded-full font-bold">در انتظار اقدام</span>}
+                      {ord.status === 'canceled' && <span className="text-xs text-red-500 bg-red-450/5 border border-red-500/25 px-3 py-1 rounded-full font-bold font-sans">لغو شده</span>}
+                      {ord.status === 'pending' && <span className="text-xs text-amber-400 bg-amber-400/5 border border-amber-500/20 px-3 py-1 rounded-full font-bold animate-pulse">در انتظار اقدام</span>}
                     </div>
                   </div>
                  ))}
@@ -443,38 +630,205 @@ export default function Admin() {
           </motion.div>
         )}
 
-        {/* --- Unified Content, Price, Active status, and Orders management tab --- */}
         {activeTab === 'orders' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 max-w-6xl mx-auto">
             <header className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-zinc-850 pb-6">
               <div>
                  <h1 className="text-3xl font-bold tracking-tight text-zinc-100">بخش فروشگاه دیجیتال</h1>
-                 <p className="text-zinc-450 text-sm mt-1.5">مدیریت محصولات، تعیین قیمت‌ها، فعال/غیرفعال کردن منوی لات‌ها و نظارت بر فاکتورها.</p>
+                 <p className="text-zinc-450 text-sm mt-1.5">{"مدیریت سلسله‌مراتب محصولات (گروه -> زیرگروه -> محصول)، فعال/غیرفعال کردن نمایش عمومی و بررسی فاکتورها."}</p>
               </div>
               
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
+                <button 
+                  onClick={() => setProductsSubTab('groups')} 
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${productsSubTab === 'groups' ? 'bg-indigo-500 text-white' : 'bg-zinc-900 text-zinc-400 border border-zinc-800'}`}
+                >
+                  📁 گروه‌ها ({groups.length})
+                </button>
+                <button 
+                  onClick={() => setProductsSubTab('subgroups')} 
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${productsSubTab === 'subgroups' ? 'bg-indigo-500 text-white' : 'bg-zinc-900 text-zinc-400 border border-zinc-800'}`}
+                >
+                  🌿 زیرگروه‌ها ({subGroups.length})
+                </button>
                 <button 
                   onClick={() => setProductsSubTab('products')} 
-                  className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${productsSubTab === 'products' ? 'bg-indigo-500 text-white' : 'bg-zinc-900 text-zinc-400 border border-zinc-800'}`}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${productsSubTab === 'products' ? 'bg-indigo-500 text-white' : 'bg-zinc-900 text-zinc-400 border border-zinc-800'}`}
                 >
-                  جعبه محصولات و لات‌ها ({products.length})
+                  📦 محصولات و لات‌ها ({products.length})
                 </button>
                 <button 
                   onClick={() => setProductsSubTab('orders')} 
-                  className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${productsSubTab === 'orders' ? 'bg-indigo-500 text-white' : 'bg-zinc-900 text-zinc-400 border border-zinc-800'}`}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${productsSubTab === 'orders' ? 'bg-indigo-500 text-white' : 'bg-zinc-900 text-zinc-400 border border-zinc-800'}`}
                 >
-                  حق اشتراک و سفارشات ({orders.length})
+                  🧾 سفارشات ({orders.length})
                 </button>
               </div>
             </header>
 
-            {productsSubTab === 'products' ? (
+            {productsSubTab === 'groups' ? (
+              <div className="space-y-6">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-zinc-900/20 p-4 rounded-xl border border-zinc-850 gap-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-zinc-200">📁 مدیریت گروه‌های اصلی محصولات</h3>
+                    <p className="text-xs text-zinc-500 mt-1">تعریف دسته‌بندی‌های کلان سایت (مثال: اشتراک‌ها و اکانت‌ها، خدمات طراحی اختصاصی، لایسنس‌ها)</p>
+                  </div>
+                  <button 
+                    onClick={openNewGroupModal}
+                    className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>گروه جدید +</span>
+                  </button>
+                </div>
+
+                <div className="glass-panel overflow-hidden border border-zinc-800/80">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-right text-zinc-450">
+                      <thead className="text-xs text-zinc-300 bg-zinc-900/60 border-b border-zinc-850">
+                        <tr>
+                          <th className="px-6 py-4 text-right w-24">عکس گروه</th>
+                          <th className="px-6 py-4 text-right">عنوان گروه اصلی</th>
+                          <th className="px-6 py-4 text-center">وضعیت نمایش</th>
+                          <th className="px-6 py-4 text-center">زیرشاخه‌ها</th>
+                          <th className="px-6 py-4 text-center">عملیات ادمین</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {groups.map(g => (
+                          <tr key={g.id} className="border-b border-zinc-850/60 hover:bg-zinc-900/20 transition-colors">
+                            <td className="px-6 py-3">
+                              {g.image ? (
+                                <img src={g.image} alt={g.title} className="w-10 h-10 object-cover rounded-lg border border-zinc-800" referrerPolicy="no-referrer" />
+                              ) : (
+                                <div className="w-10 h-10 bg-zinc-800 rounded-lg flex items-center justify-center text-[10px] text-zinc-500">بدون عکس</div>
+                              )}
+                            </td>
+                            <td className="px-6 py-3 font-bold text-white text-sm">{g.title}</td>
+                            <td className="px-6 py-3 text-center">
+                              <button onClick={() => toggleGroupActive(g)} className="cursor-pointer focus:outline-none transition-transform active:scale-95">
+                                {g.active !== false ? (
+                                  <span className="inline-flex items-center gap-1 text-[11px] text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20 font-bold">فعال</span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[11px] text-red-400 bg-red-450/10 px-2.5 py-1 rounded-full border border-red-500/20 font-bold">مخفی/غیرفعال</span>
+                                )}
+                              </button>
+                            </td>
+                            <td className="px-6 py-3 text-center text-zinc-400 text-xs">
+                              {subGroups.filter(s => s.groupId === g.id).length} زیرشاخه
+                            </td>
+                            <td className="px-6 py-3 text-center">
+                              <div className="flex justify-center gap-2">
+                                <button onClick={() => openEditGroupModal(g)} className="text-sky-400 hover:text-sky-300 p-1.5 rounded bg-sky-400/5 hover:bg-sky-400/15 cursor-pointer">
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                                <button onClick={() => handleDeleteGroup(g.id)} className="text-red-400 hover:text-red-300 p-1.5 rounded bg-red-450/5 hover:bg-red-450/15 cursor-pointer">
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                        {groups.length === 0 && (
+                          <tr><td colSpan={5} className="text-center py-6 text-zinc-550 text-sm">هیچ گروه کاربری فعالی تعریف نشده است.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            ) : productsSubTab === 'subgroups' ? (
+              <div className="space-y-6">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-zinc-900/20 p-4 rounded-xl border border-zinc-850 gap-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-zinc-200">🌿 مدیریت زیرگروه‌های تخصصی</h3>
+                    <p className="text-xs text-zinc-500 mt-1">تعریف دسته‌های میانی وب‌سایت (مثال: اکانت‌های هوش مصنوعی، سرویس‌های کمپانی اپل، طراحی سایت)</p>
+                  </div>
+                  <button 
+                    onClick={openNewSubGroupModal}
+                    className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>زیرگروه جدید +</span>
+                  </button>
+                </div>
+
+                <div className="glass-panel overflow-hidden border border-zinc-800/80">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-right text-zinc-450">
+                      <thead className="text-xs text-zinc-300 bg-zinc-900/60 border-b border-zinc-850">
+                        <tr>
+                          <th className="px-6 py-4 text-right w-24">تصویر</th>
+                          <th className="px-6 py-4 text-right">عنوان زیرگروه</th>
+                          <th className="px-6 py-4 text-right">گروه والد اصلی</th>
+                          <th className="px-6 py-4 text-center">وضعیت نمایش</th>
+                          <th className="px-6 py-4 text-center">جمع محصولات</th>
+                          <th className="px-6 py-4 text-center">عملیات ادمین</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {subGroups.map(sg => {
+                          const parentG = groups.find(g => g.id === sg.groupId);
+                          const prodCount = products.filter(p => p.subGroupId === sg.id).length;
+                          return (
+                            <tr key={sg.id} className="border-b border-zinc-850/60 hover:bg-zinc-900/20 transition-colors">
+                              <td className="px-6 py-3">
+                                {sg.image ? (
+                                  <img src={sg.image} alt={sg.title} className="w-10 h-10 object-cover rounded-lg border border-zinc-800" referrerPolicy="no-referrer" />
+                                ) : (
+                                  <div className="w-10 h-10 bg-zinc-800 rounded-lg flex items-center justify-center text-[10px] text-zinc-500">بدون عکس</div>
+                                )}
+                              </td>
+                              <td className="px-6 py-3 font-bold text-white text-sm">{sg.title}</td>
+                              <td className="px-6 py-3 text-zinc-300 text-xs">
+                                {parentG ? (
+                                  <span className="bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 px-2 py-1 rounded">
+                                    {parentG.title}
+                                  </span>
+                                ) : (
+                                  <span className="text-red-500">یافت نشد</span>
+                                )}
+                              </td>
+                              <td className="px-6 py-3 text-center">
+                                <button onClick={() => toggleSubGroupActive(sg)} className="cursor-pointer focus:outline-none transition-transform active:scale-95">
+                                  {sg.active !== false ? (
+                                    <span className="inline-flex items-center gap-1 text-[11px] text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20 font-bold">فعال</span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 text-[11px] text-red-400 bg-red-450/10 px-2.5 py-1 rounded-full border border-red-500/20 font-bold">مخفی</span>
+                                  )}
+                                </button>
+                              </td>
+                              <td className="px-6 py-3 text-center text-zinc-400 text-xs">
+                                {prodCount} محصول
+                              </td>
+                              <td className="px-6 py-3 text-center">
+                                <div className="flex justify-center gap-2">
+                                  <button onClick={() => openEditSubGroupModal(sg)} className="text-sky-400 hover:text-sky-300 p-1.5 rounded bg-sky-400/5 hover:bg-sky-400/15 cursor-pointer">
+                                    <Edit2 className="w-4 h-4" />
+                                  </button>
+                                  <button onClick={() => handleDeleteSubGroup(sg.id)} className="text-red-400 hover:text-red-300 p-1.5 rounded bg-red-450/5 hover:bg-red-450/15 cursor-pointer">
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {subGroups.length === 0 && (
+                          <tr><td colSpan={6} className="text-center py-6 text-zinc-550 text-sm">هیچ زیرشاخه‌ای برای تخصیص به محصولات یافت نشد. ابتدا یک زیرشاخه بسازید.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            ) : productsSubTab === 'products' ? (
               <div className="space-y-6">
                 <div className="flex justify-between items-center bg-zinc-900/20 p-4 rounded-xl border border-zinc-850">
-                  <span className="text-sm text-zinc-450 font-normal">تعیین خدمات، محصولات و بخش‌های فروشگاه در دو دستهٔ اکانت‌های آماده و طراحی سفارشی.</span>
+                  <span className="text-sm text-zinc-450 font-normal">تعیین خدمات، محصولات و بخش‌های فروشگاه مرتبط با گروه‌ها و زیرگروه‌های والد.</span>
                   <button 
                     onClick={openNewProductModal}
-                    className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer"
+                    className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer whitespace-nowrap"
                   >
                     <Plus className="w-4 h-4" />
                     <span>سرویس یا محصول جدید +</span>
@@ -486,78 +840,88 @@ export default function Admin() {
                     <table className="w-full text-sm text-right text-zinc-450">
                       <thead className="text-xs text-zinc-300 uppercase bg-zinc-900/60 border-b border-zinc-850">
                         <tr>
-                          <th className="px-6 py-4 font-bold text-center w-20">آیکون</th>
                           <th className="px-6 py-4 text-right">عنوان محصول/خدمت</th>
                           <th className="px-6 py-4 text-center">نوع بخش</th>
-                          <th className="px-6 py-4 text-center">دسته‌بندی</th>
-                          <th className="px-6 py-4 text-center">قیمت پایانی/پایه</th>
+                          <th className="px-6 py-4 text-center">مسیر دسته‌بندی اصلی</th>
+                          <th className="px-6 py-4 text-center">قیمت فاکتور</th>
                           <th className="px-6 py-4 text-center">وضعیت نمایش</th>
                           <th className="px-6 py-4 text-center">عملیات ادمین</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {products.map(p => (
-                          <tr key={p.id} className="border-b border-zinc-850/60 hover:bg-zinc-900/20 transition-colors">
-                             <td className="px-6 py-4 text-center">
-                               <span className="inline-block bg-zinc-850/60 rounded px-2.5 py-1 text-xs select-none border border-zinc-800">
-                                 {p.icon}
-                               </span>
-                             </td>
-                             <td className="px-6 py-4 font-bold text-zinc-200">
-                               <div>
-                                 <p className="text-sm font-bold text-white mb-0.5">{p.title}</p>
-                                 <p className="text-xs text-zinc-500 font-normal truncate max-w-[280px]">{p.desc}</p>
-                               </div>
-                             </td>
-                             <td className="px-6 py-4 text-center">
-                               <span className={`inline-block text-[11px] px-2.5 py-1 rounded-full font-bold ${p.type === 'account' ? 'bg-indigo-500/10 text-indigo-400' : 'bg-purple-500/10 text-purple-400'}`}>
-                                 {p.type === 'account' ? 'اکانت' : 'خدمات توسعه'}
-                               </span>
-                             </td>
-                             <td className="px-6 py-4 text-center font-mono text-xs text-zinc-450">
-                               {p.category}
-                             </td>
-                             <td className="px-6 py-4 text-center text-emerald-400 font-bold font-mono">
-                               {p.price}
-                             </td>
-                             <td className="px-6 py-4 text-center">
-                               <button 
-                                 onClick={() => toggleProductActiveStatus(p)}
-                                 className="cursor-pointer font-bold focus:outline-none transition-transform active:scale-95"
-                               >
-                                 {p.active !== false ? (
-                                   <span className="flex items-center justify-center gap-1.5 text-xs text-emerald-500 bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-1 rounded-full">
-                                     <Eye className="w-3.5 h-3.5" />
-                                     <span>فعال</span>
-                                   </span>
-                                 ) : (
-                                   <span className="flex items-center justify-center gap-1.5 text-xs text-red-400 bg-red-450/10 border border-red-500/25 px-2.5 py-1 rounded-full">
-                                     <EyeOff className="w-3.5 h-3.5" />
-                                     <span>مخفی/غیرفعال</span>
-                                   </span>
-                                 )}
-                               </button>
-                             </td>
-                             <td className="px-6 py-4">
-                               <div className="flex items-center justify-center gap-2.5">
+                        {products.map(p => {
+                          const productGroup = groups.find(g => g.id === p.groupId);
+                          const productSubGroup = subGroups.find(sg => sg.id === p.subGroupId);
+                          return (
+                            <tr key={p.id} className="border-b border-zinc-850/60 hover:bg-zinc-900/20 transition-colors">
+                               <td className="px-6 py-4 font-bold text-zinc-200">
+                                 <div className="flex items-center gap-3">
+                                   {p.image ? (
+                                     <img src={p.image} alt={p.title} className="w-10 h-10 object-cover rounded-lg border border-zinc-800" referrerPolicy="no-referrer" />
+                                   ) : (
+                                     <div className="w-10 h-10 bg-zinc-805/70 rounded-lg flex items-center justify-center text-zinc-500 text-xs select-none border border-zinc-800">
+                                       {p.icon}
+                                     </div>
+                                   )}
+                                   <div>
+                                     <p className="text-sm font-bold text-white mb-0.5">{p.title}</p>
+                                     <p className="text-xs text-zinc-500 font-normal truncate max-w-[280px]">{p.desc}</p>
+                                   </div>
+                                 </div>
+                               </td>
+                               <td className="px-6 py-4 text-center">
+                                 <span className={`inline-block text-[11px] px-2.5 py-1 rounded-full font-bold ${p.type === 'account' ? 'bg-indigo-500/10 text-indigo-400' : 'bg-purple-500/10 text-purple-400'}`}>
+                                   {p.type === 'account' ? 'اکانت' : 'خدمات توسعه'}
+                                 </span>
+                               </td>
+                               <td className="px-6 py-4 text-center font-mono text-xs text-zinc-450">
+                                 <div className="text-xs space-y-0.5">
+                                   <div className="text-zinc-200 font-bold font-sans">{productGroup ? productGroup.title : <span className="text-zinc-600 font-normal">نامشخص</span>}</div>
+                                   <div className="text-zinc-500 text-[10px] font-sans">{productSubGroup ? productSubGroup.title : <span className="text-zinc-600 font-normal">-</span>}</div>
+                                 </div>
+                               </td>
+                               <td className="px-6 py-4 text-center text-emerald-400 font-bold font-mono">
+                                 {p.price}
+                               </td>
+                               <td className="px-6 py-4 text-center">
                                  <button 
-                                   onClick={() => openEditProductModal(p)}
-                                   className="text-sky-400 hover:text-sky-300 p-1.5 rounded bg-sky-400/5 hover:bg-sky-400/15 transition-all cursor-pointer"
-                                   title="ویرایش محصول"
+                                   onClick={() => toggleProductActiveStatus(p)}
+                                   className="cursor-pointer font-bold focus:outline-none transition-transform active:scale-95"
                                  >
-                                   <Edit2 className="w-4 h-4" />
+                                   {p.active !== false ? (
+                                     <span className="flex items-center justify-center gap-1.5 text-xs text-emerald-500 bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-1 rounded-full">
+                                       <Eye className="w-3.5 h-3.5" />
+                                       <span>فعال</span>
+                                     </span>
+                                   ) : (
+                                     <span className="flex items-center justify-center gap-1.5 text-xs text-red-400 bg-red-450/10 border border-red-500/25 px-2.5 py-1 rounded-full">
+                                       <EyeOff className="w-3.5 h-3.5" />
+                                       <span>مخفی/غیرفعال</span>
+                                     </span>
+                                   )}
                                  </button>
-                                 <button 
-                                   onClick={() => handleDeleteProduct(p.id)}
-                                   className="text-red-400 hover:text-red-300 p-1.5 rounded bg-red-450/5 hover:bg-red-450/15 transition-all cursor-pointer"
-                                   title="حذف کامل"
-                                 >
-                                   <Trash2 className="w-4 h-4" />
-                                 </button>
-                               </div>
-                             </td>
-                          </tr>
-                        ))}
+                               </td>
+                               <td className="px-6 py-4">
+                                 <div className="flex items-center justify-center gap-2.5">
+                                   <button 
+                                     onClick={() => openEditProductModal(p)}
+                                     className="text-sky-400 hover:text-sky-300 p-1.5 rounded bg-sky-400/5 hover:bg-sky-400/15 transition-all cursor-pointer"
+                                     title="ویرایش محصول"
+                                   >
+                                     <Edit2 className="w-4 h-4" />
+                                   </button>
+                                   <button 
+                                     onClick={() => handleDeleteProduct(p.id)}
+                                     className="text-red-400 hover:text-red-300 p-1.5 rounded bg-red-450/5 hover:bg-red-450/15 transition-all cursor-pointer"
+                                     title="حذف کامل"
+                                   >
+                                     <Trash2 className="w-4 h-4" />
+                                   </button>
+                                 </div>
+                               </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -825,6 +1189,102 @@ export default function Admin() {
                 </div>
              </div>
              <div>
+              <div className="glass-panel p-6 border border-zinc-805/40 bg-zinc-900/30 rounded-2xl mb-6">
+                 <h3 className="font-bold text-lg mb-4 text-white flex items-center gap-2 font-sans">
+                   <Sparkles className="w-5 h-5 text-indigo-400" />
+                   تنظیمات ویدیو هیرو و لندینگ پیج
+                 </h3>
+                 <div className="space-y-4">
+                   <div>
+                     <label className="text-sm font-medium text-zinc-300 block mb-2">آدرس لینک مستقیم ویدیو (Hero Video URL)</label>
+                     <input 
+                       type="text" 
+                       value={adminSettings.heroVideoUrl || ''} 
+                       onChange={e => setAdminSettings({...adminSettings, heroVideoUrl: e.target.value})} 
+                       className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-white outline-none focus:border-indigo-500 font-mono text-sm shadow-inner" 
+                       dir="ltr" 
+                       placeholder="e.g. https://example.com/video.mp4" 
+                     />
+                     <p className="text-[10px] text-zinc-500 mt-1">
+                       یک لینک مستقیم به فایل ویدیویی MP4 وارد کنید تا در بخش هیرو (بالای سایت) به صورت بک‌گراند زنده و سینماتیک لوپ شود.
+                     </p>
+                   </div>
+                 </div>
+              </div>
+
+              <div className="glass-panel p-6 border border-zinc-805/40 bg-zinc-900/30 rounded-2xl mb-6">
+                 <h3 className="font-bold text-lg mb-4 text-white flex items-center gap-2 font-sans">
+                   <Activity className="w-5 h-5 text-indigo-400" />
+                   شبکه‌های اجتماعی و اطلاعات تماس (ارتباط با ما در فوتر)
+                 </h3>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                   <div>
+                     <label className="text-sm font-medium text-zinc-300 block mb-2">آدرس اینستاگرام</label>
+                     <input 
+                       type="text" 
+                       value={adminSettings.socialInstagram || ''} 
+                       onChange={e => setAdminSettings({...adminSettings, socialInstagram: e.target.value})} 
+                       className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-white outline-none focus:border-indigo-500 text-sm" 
+                       dir="ltr" 
+                       placeholder="https://instagram.com/profile" 
+                     />
+                   </div>
+                   <div>
+                     <label className="text-sm font-medium text-zinc-300 block mb-2">لینک کانال یا ادمین تلگرام</label>
+                     <input 
+                       type="text" 
+                       value={adminSettings.socialTelegram || ''} 
+                       onChange={e => setAdminSettings({...adminSettings, socialTelegram: e.target.value})} 
+                       className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-white outline-none focus:border-indigo-500 text-sm" 
+                       dir="ltr" 
+                       placeholder="https://t.me/username" 
+                     />
+                   </div>
+                   <div>
+                     <label className="text-sm font-medium text-zinc-300 block mb-2">آیدی یا لینک واتساپ</label>
+                     <input 
+                       type="text" 
+                       value={adminSettings.socialWhatsapp || ''} 
+                       onChange={e => setAdminSettings({...adminSettings, socialWhatsapp: e.target.value})} 
+                       className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-white outline-none focus:border-indigo-500 text-sm" 
+                       dir="ltr" 
+                       placeholder="https://wa.me/number" 
+                     />
+                   </div>
+                   <div>
+                     <label className="text-sm font-medium text-zinc-300 block mb-2">تلفن تماس مدیریت / پشتیبانی</label>
+                     <input 
+                       type="text" 
+                       value={adminSettings.contactPhone || ''} 
+                       onChange={e => setAdminSettings({...adminSettings, contactPhone: e.target.value})} 
+                       className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-white outline-none focus:border-indigo-500 text-sm" 
+                       placeholder="مثلا: ۰۹۱۲۳۴۵۶۷۸۹" 
+                     />
+                   </div>
+                   <div className="md:col-span-2">
+                     <label className="text-sm font-medium text-zinc-300 block mb-2">ایمیل ارتباط باما</label>
+                     <input 
+                       type="text" 
+                       value={adminSettings.contactEmail || ''} 
+                       onChange={e => setAdminSettings({...adminSettings, contactEmail: e.target.value})} 
+                       className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-white outline-none focus:border-indigo-500 font-mono text-xs" 
+                       dir="ltr"
+                       placeholder="info@yourstore.com" 
+                     />
+                   </div>
+                   <div className="md:col-span-2">
+                     <label className="text-sm font-medium text-zinc-300 block mb-2">آدرس حضوری آکادمی / شرکت</label>
+                     <textarea 
+                       rows={2}
+                       value={adminSettings.contactAddress || ''} 
+                       onChange={e => setAdminSettings({...adminSettings, contactAddress: e.target.value})} 
+                       className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-white outline-none focus:border-indigo-500 text-sm" 
+                       placeholder="تهران، خیابان ولیعصر، مجتمع تجاری..." 
+                     />
+                   </div>
+                 </div>
+              </div>
+
                <button onClick={handleSaveSettings} className="bg-indigo-500 hover:bg-indigo-600 px-6 py-3 rounded-xl font-bold transition-all shadow-md shadow-indigo-500/10 cursor-pointer">
                  ذخیره قطعی تمامی تنظیمات
                </button>
@@ -954,7 +1414,7 @@ export default function Admin() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1.5 text-zinc-300">شناسه دسته بندی (انگلیسی)</label>
+                    <label className="block text-sm font-medium mb-1.5 text-zinc-300">شناسه کلی دسته‌بندی</label>
                     <input 
                       type="text"
                       value={formCategory}
@@ -963,6 +1423,74 @@ export default function Admin() {
                       className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-indigo-500 transition-colors outline-none font-mono"
                       dir="ltr"
                     />
+                  </div>
+                </div>
+
+                {/* Parent Group and Subgroup selectors */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5 text-zinc-300">🔗 گروه والد محصولات</label>
+                    <select
+                      value={formGroupId || ''}
+                      onChange={e => {
+                        const val = e.target.value ? Number(e.target.value) : undefined;
+                        setFormGroupId(val);
+                        setFormSubGroupId(undefined);
+                      }}
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-150 focus:border-indigo-500 transition-colors outline-none cursor-pointer"
+                    >
+                      <option value="">(انتخاب گروه والد اصلی)</option>
+                      {groups.map(g => (
+                        <option key={g.id} value={g.id}>{g.title}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5 text-zinc-300">🌿 زیرگروه والد محصولات</label>
+                    <select
+                      value={formSubGroupId || ''}
+                      onChange={e => setFormSubGroupId(e.target.value ? Number(e.target.value) : undefined)}
+                      disabled={!formGroupId}
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-150 focus:border-indigo-500 transition-colors outline-none cursor-pointer disabled:opacity-40"
+                    >
+                      <option value="">(انتخاب زیرگروه والد)</option>
+                      {subGroups.filter(s => s.groupId === formGroupId).map(s => (
+                        <option key={s.id} value={s.id}>{s.title}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Product/Service Image URL Selector */}
+                <div>
+                  <label className="block text-sm font-medium mb-1.5 text-zinc-300">🖼️ آدرس تصویر یا عکس کارت (Image URL)</label>
+                  <input 
+                    type="text"
+                    value={formImage || ''}
+                    onChange={e => setFormImage(e.target.value)}
+                    placeholder="https://images.unsplash.com/... یا از تصاویر نمونه زیر"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-indigo-500 transition-colors outline-none"
+                    dir="ltr"
+                  />
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    <span className="text-zinc-550 text-xs py-1">تصاویر آماده سریع:</span>
+                    {[
+                      { label: 'اپل', url: 'https://images.unsplash.com/photo-1491933300451-c42917146e22?w=500&auto=format&fit=crop&q=60' },
+                      { label: 'هوش مصنوعی', url: 'https://images.unsplash.com/photo-1677442136019-21780efad99a?w=500&auto=format&fit=crop&q=60' },
+                      { label: 'کارت بنفش', url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&auto=format&fit=crop&q=60' },
+                      { label: 'توسعه وب', url: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=500&auto=format&fit=crop&q=60' },
+                      { label: 'ربات‌نویسی', url: 'https://images.unsplash.com/photo-1531747118685-ca8fa6e08806?w=500&auto=format&fit=crop&q=60' },
+                      { label: 'موبایل', url: 'https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?w=500&auto=format&fit=crop&q=60' }
+                    ].map((img, idx) => (
+                      <button 
+                        key={idx} 
+                        type="button" 
+                        onClick={() => setFormImage(img.url)}
+                        className="text-[10px] bg-zinc-900 hover:bg-indigo-500/20 hover:text-indigo-400 border border-zinc-800 px-2 py-0.5 rounded transition-all cursor-pointer"
+                      >
+                        {img.label}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
@@ -984,17 +1512,17 @@ export default function Admin() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1 text-zinc-300">وضعیت پیشفرض نمایش</label>
-                    <div className="flex items-center gap-3 bg-zinc-900 border border-zinc-805/80 p-2 px-4 rounded-xl mt-1.5">
-                      <span className="text-xs text-zinc-400 font-normal">نمایش در لیست اصلی فروشگاه:</span>
+                    <div className="flex items-center gap-3 bg-zinc-900 border border-zinc-805/80 p-2 px-4 rounded-xl mt-1.5 font-sans">
+                      <span className="text-xs text-zinc-400 font-normal">وضعیت:</span>
                       <button 
                         type="button" 
                         onClick={() => setFormActive(!formActive)}
                         className="cursor-pointer text-indigo-400 font-bold focus:outline-none transition-transform"
                       >
                         {formActive ? (
-                          <span className="text-xs text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-bold">نمایان</span>
+                          <span className="text-xs text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded border border-emerald-500/20 font-bold">نمایان</span>
                         ) : (
-                          <span className="text-xs text-red-400 bg-red-450/10 px-2 py-0.5 rounded border border-red-500/20 font-bold">مخفی</span>
+                          <span className="text-xs text-red-400 bg-red-450/10 px-2.5 py-0.5 rounded border border-red-500/20 font-bold">مخفی</span>
                         )}
                       </button>
                     </div>
@@ -1019,7 +1547,7 @@ export default function Admin() {
                     value={formSpecs}
                     onChange={e => setFormSpecs(e.target.value)}
                     placeholder="مثال:&#10;پشتیبانی ۲۴ ساعته اختصاصی ادمین&#10;تضمین بازگشت وجه تا ۷ روز&#10;سرعت فوق‌العاده بالا و پایداری بالا"
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs text-zinc-200 focus:border-indigo-500 transition-colors outline-none"
+                    className="w-full bg-zinc-900 border border-indigo-550/10 rounded-xl px-4 py-2.5 text-xs text-zinc-200 focus:border-indigo-500 transition-colors outline-none"
                   ></textarea>
                 </div>
 
@@ -1037,6 +1565,167 @@ export default function Admin() {
                   >
                     {editingProduct ? 'ذخیره تغییرات محصول' : 'ذخیره محصول جدید'}
                   </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* --- Group CRUD Modal (ثبت و ویرایش گروه اصلی) --- */}
+      <AnimatePresence>
+        {isGroupModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md overflow-y-auto">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl relative my-auto"
+            >
+              <button 
+                onClick={() => setIsGroupModalOpen(false)}
+                className="absolute top-4 left-4 text-zinc-400 hover:text-white cursor-pointer w-8 h-8 flex items-center justify-center rounded-full bg-zinc-900 border border-zinc-800"
+              >
+                ✕
+              </button>
+              
+              <h2 className="text-xl font-bold mb-6 text-white border-b border-zinc-850 pb-3 flex items-center gap-2">
+                <Folder className="w-5 h-5 text-indigo-400" />
+                {editingGroup ? 'ویرایش گروه محصول' : 'ایجاد گروه محصول جدید'}
+              </h2>
+
+              <form onSubmit={handleSaveGroup} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1.5 text-zinc-300">عنوان گروه اصلی</label>
+                  <input 
+                    type="text"
+                    value={groupFormTitle}
+                    onChange={e => setGroupFormTitle(e.target.value)}
+                    placeholder="مثلا: اشتراک اکانت‌های توسعه"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-indigo-500 transition-colors outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5 text-zinc-300">آدرس تصویر گروه (URL)</label>
+                  <input 
+                    type="text"
+                    value={groupFormImage}
+                    onChange={e => setGroupFormImage(e.target.value)}
+                    placeholder="https://images.unsplash.com/... یا از تصاویر نمونه"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-indigo-500 transition-colors outline-none"
+                    dir="ltr"
+                  />
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {[
+                      { label: 'بنفش مدرن', url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&auto=format&fit=crop&q=60' },
+                      { label: 'طرح آبی', url: 'https://images.unsplash.com/photo-1600132806370-bf17e65e942f?w=500&auto=format&fit=crop&q=60' },
+                      { label: 'تکنولوژی', url: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=500&auto=format&fit=crop&q=60' }
+                    ].map((img, idx) => (
+                      <button key={idx} type="button" onClick={() => setGroupFormImage(img.url)} className="text-[9px] bg-zinc-900 text-zinc-400 hover:text-indigo-400 border border-zinc-800 px-1.5 py-0.5 rounded cursor-pointer">{img.label}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 py-2">
+                  <input 
+                    type="checkbox" 
+                    id="groupFormActive"
+                    checked={groupFormActive} 
+                    onChange={e => setGroupFormActive(e.target.checked)}
+                    className="rounded border-zinc-800 bg-zinc-90 w-4 h-4 text-indigo-550" 
+                  />
+                  <label htmlFor="groupFormActive" className="text-xs text-zinc-300 select-none cursor-pointer">نمایش عمومی در سایت (فعال)</label>
+                </div>
+
+                <div className="flex gap-3 pt-4 border-t border-zinc-850">
+                  <button type="button" onClick={() => setIsGroupModalOpen(false)} className="flex-1 bg-zinc-900 text-zinc-400 rounded-xl py-2.5 text-xs transition-colors cursor-pointer">انصراف</button>
+                  <button type="submit" className="flex-1 bg-indigo-500 text-white rounded-xl py-2.5 text-xs font-bold transition-all cursor-pointer">{editingGroup ? 'ذخیره تغییرات' : 'افزودن گروه'}</button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* --- SubGroup CRUD Modal (ثبت و ویرایش زیرشاخه‌ها) --- */}
+      <AnimatePresence>
+        {isSubGroupModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md overflow-y-auto">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl relative my-auto"
+            >
+              <button 
+                onClick={() => setIsSubGroupModalOpen(false)}
+                className="absolute top-4 left-4 text-zinc-400 hover:text-white cursor-pointer w-8 h-8 flex items-center justify-center rounded-full bg-zinc-900 border border-zinc-800"
+              >
+                ✕
+              </button>
+              
+              <h2 className="text-xl font-bold mb-6 text-white border-b border-zinc-850 pb-3 flex items-center gap-2">
+                <GitMerge className="w-5 h-5 text-indigo-400" />
+                {editingSubGroup ? 'ویرایش زیرگروه' : 'ایجاد زیرگروه جدید'}
+              </h2>
+
+              <form onSubmit={handleSaveSubGroup} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1.5 text-zinc-300">گروه والد اصلی</label>
+                  <select
+                    value={subGroupFormGroupId}
+                    onChange={e => setSubGroupFormGroupId(Number(e.target.value))}
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-150 focus:border-indigo-500 transition-colors outline-none cursor-pointer"
+                  >
+                    <option value="0">(انتخاب گروه والد)</option>
+                    {groups.map(g => (
+                      <option key={g.id} value={g.id}>{g.title}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5 text-zinc-300">عنوان زیرشاخه</label>
+                  <input 
+                    type="text"
+                    value={subGroupFormTitle}
+                    onChange={e => setSubGroupFormTitle(e.target.value)}
+                    placeholder="مثلا: سرویس‌های هوش مصنوعی"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-indigo-500 transition-colors outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5 text-zinc-300">تصویر مرتبط زیرشاخه</label>
+                  <input 
+                    type="text"
+                    value={subGroupFormImage}
+                    onChange={e => setSubGroupFormImage(e.target.value)}
+                    placeholder="https://images.unsplash.com/..."
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-indigo-500 transition-colors outline-none"
+                    dir="ltr"
+                  />
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {[
+                      { label: 'سفید نویسی', url: 'https://images.unsplash.com/photo-1600132806370-bf17e65e942f?w=500&auto=format&fit=crop&q=60' },
+                      { label: 'اکانت پلاس', url: 'https://images.unsplash.com/photo-1677442136019-21780efad99a?w=500&auto=format&fit=crop&q=60' },
+                      { label: 'توسعه وبسایت', url: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=500&auto=format&fit=crop&q=60' }
+                    ].map((img, idx) => (
+                      <button key={idx} type="button" onClick={() => setSubGroupFormImage(img.url)} className="text-[9px] bg-zinc-900 text-zinc-400 hover:text-indigo-400 border border-zinc-800 px-1.5 py-0.5 rounded cursor-pointer">{img.label}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 py-2">
+                  <input 
+                    type="checkbox" 
+                    id="subGroupFormActive"
+                    checked={subGroupFormActive} 
+                    onChange={e => setSubGroupFormActive(e.target.checked)}
+                    className="rounded border-zinc-800 bg-zinc-90 w-4 h-4 text-indigo-550" 
+                  />
+                  <label htmlFor="subGroupFormActive" className="text-xs text-zinc-300 select-none cursor-pointer">نمایش عمومی (فعال)</label>
+                </div>
+
+                <div className="flex gap-3 pt-4 border-t border-zinc-850">
+                  <button type="button" onClick={() => setIsSubGroupModalOpen(false)} className="flex-1 bg-zinc-900 text-zinc-400 rounded-xl py-2.5 text-xs transition-colors cursor-pointer">انصراف</button>
+                  <button type="submit" className="flex-1 bg-indigo-500 text-white rounded-xl py-2.5 text-xs font-bold transition-all cursor-pointer">{editingSubGroup ? 'ذخیره تغییرات' : 'افزودن زیرشاخه'}</button>
                 </div>
               </form>
             </motion.div>

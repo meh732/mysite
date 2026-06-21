@@ -1,3 +1,18 @@
+export interface Group {
+  id: number;
+  title: string;
+  image: string; // url or name
+  active: boolean;
+}
+
+export interface SubGroup {
+  id: number;
+  groupId: number;
+  title: string;
+  image: string;
+  active: boolean;
+}
+
 export interface Product {
   id: number;
   type: 'account' | 'service';
@@ -6,8 +21,11 @@ export interface Product {
   desc: string;
   price: string;
   icon: string;
+  image?: string; // image selection URL/path
   active?: boolean;
   specs?: string; // New field for customizable detailed features/specs
+  groupId?: number;
+  subGroupId?: number;
 }
 
 export interface Order {

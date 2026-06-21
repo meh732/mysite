@@ -6,17 +6,29 @@ import nodemailer from 'nodemailer';
 import fs from 'fs';
 
 // --- Mock Database ---
+let groups = [
+  { id: 1, title: 'اشتراک‌ها و اکانت‌ها', image: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&auto=format&fit=crop&q=60', active: true },
+  { id: 2, title: 'خدمات طراحی اختصاصی', image: 'https://images.unsplash.com/photo-1600132806370-bf17e65e942f?w=500&auto=format&fit=crop&q=60', active: true }
+];
+
+let subGroups = [
+  { id: 11, groupId: 1, title: 'اکانت‌های هوش مصنوعی', image: 'https://images.unsplash.com/photo-1677442136019-21780efad99a?w=500&auto=format&fit=crop&q=60', active: true },
+  { id: 12, groupId: 1, title: 'سرویس‌های شرکت اپل', image: 'https://images.unsplash.com/photo-1491933300451-c42917146e22?w=500&auto=format&fit=crop&q=60', active: true },
+  { id: 21, groupId: 2, title: 'طراحی تخصصی وبسایت', image: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=500&auto=format&fit=crop&q=60', active: true },
+  { id: 22, groupId: 2, title: 'ربات‌نویسی پیام‌رسان‌ها', image: 'https://images.unsplash.com/photo-1531747118685-ca8fa6e08806?w=500&auto=format&fit=crop&q=60', active: true }
+];
+
 let products = [
-  { id: 1, type: 'account', category: 'apple', title: 'اپل آیدی اختصاصی', desc: 'با ایمیل دلخواه شما', price: '۳۵۰,۰۰۰ تومان', icon: 'Apple', active: true },
-  { id: 2, type: 'account', category: 'ai', title: 'اکانت ChatGPT Plus', desc: 'دسترسی ۳۰ روزه به GPT-4', price: '۱,۴۵۰,۰۰۰ تومان', icon: 'Bot', active: true },
-  { id: 3, type: 'account', category: 'ai', title: 'اکانت Midjourney', desc: 'اشتراک استاندارد', price: '۱,۸۰۰,۰۰۰ تومان', icon: 'Palette', active: true },
-  { id: 4, type: 'service', category: 'web', title: 'طراحی سایت شرکتی/فروشگاهی', desc: 'مدرن، ریسپانسیو و سئو شده', price: 'از ۱۰,۰۰۰,۰۰۰ تومان', icon: 'Globe', active: true },
-  { id: 5, type: 'service', category: 'bot', title: 'طراحی ربات تلگرام و بله', desc: 'فروشگاهی، پشتیبانی، مدیریت گروه', price: 'از ۳,۰۰۰,۰۰۰ تومان', icon: 'MessageCircle', active: true },
-  { id: 6, type: 'service', category: 'app', title: 'ساخت اپلیکیشن اندروید', desc: 'نیتیو و کراس‌پلتفرم', price: 'از ۱۵,۰۰۰,۰۰۰ تومان', icon: 'Smartphone', active: true },
+  { id: 1, type: 'account' as const, category: 'apple', title: 'اپل آیدی اختصاصی', desc: 'با ایمیل دلخواه شما', price: '۳۵۰,۰۰۰ تومان', icon: 'Apple', image: 'https://images.unsplash.com/photo-1491933300451-c42917146e22?w=500&auto=format&fit=crop&q=60', active: true, groupId: 1, subGroupId: 12 },
+  { id: 2, type: 'account' as const, category: 'ai', title: 'اکانت ChatGPT Plus', desc: 'دسترسی ۳۰ روزه به GPT-4', price: '۱,۴۵۰,۰۰۰ تومان', icon: 'Bot', image: 'https://images.unsplash.com/photo-1677442136019-21780efad99a?w=500&auto=format&fit=crop&q=60', active: true, groupId: 1, subGroupId: 11 },
+  { id: 3, type: 'account' as const, category: 'ai', title: 'اکانت Midjourney', desc: 'اشتراک استاندارد', price: '۱,۸۰۰,۰۰۰ تومان', icon: 'Palette', image: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&auto=format&fit=crop&q=60', active: true, groupId: 1, subGroupId: 11 },
+  { id: 4, type: 'service' as const, category: 'web', title: 'طراحی سایت شرکتی/فروشگاهی', desc: 'مدرن، ریسپانسیو و سئو شده', price: 'از ۱۰,۰۰۰,۰۰۰ تومان', icon: 'Globe', image: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=500&auto=format&fit=crop&q=60', active: true, groupId: 2, subGroupId: 21 },
+  { id: 5, type: 'service' as const, category: 'bot', title: 'طراحی ربات تلگرام و بله', desc: 'فروشگاهی، پشتیبانی، مدیریت گروه', price: 'از ۳,۰۰۰,۰۰۰ تومان', icon: 'MessageCircle', image: 'https://images.unsplash.com/photo-1531747118685-ca8fa6e08806?w=500&auto=format&fit=crop&q=60', active: true, groupId: 2, subGroupId: 22 },
+  { id: 6, type: 'service' as const, category: 'app', title: 'ساخت اپلیکیشن اندروید', desc: 'نیتیو و کراس‌پلتفرم', price: 'از ۱۵,۰۰۰,۰۰۰ تومان', icon: 'Smartphone', image: 'https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?w=500&auto=format&fit=crop&q=60', active: true, groupId: 2, subGroupId: 21 },
 ];
 
 let orders = [
-  { id: 1001, productId: 5, productTitle: 'طراحی ربات تلگرام و بله', productType: 'service', userIdentifier: 'meh732@gmail.com', price: 'از ۳,۰۰۰,۰۰۰ تومان', status: 'pending', createdAt: new Date().toISOString(), additionalDetails: 'نیاز به ربات پیشرفته فروشگاهی داریم' }
+  { id: 1001, productId: 5, productTitle: 'طراحی ربات تلگرام و بله', productType: 'service' as const, userIdentifier: 'meh732@gmail.com', price: 'از ۳,۰۰۰,۰۰۰ تومان', status: 'pending' as const, createdAt: new Date().toISOString(), additionalDetails: 'نیاز به ربات پیشرفته فروشگاهی داریم' }
 ];
 
 let users: any[] = [];
@@ -55,7 +67,14 @@ let settings = {
   enableTelegramJoinCheck: false,
   telegramJoinChannel: '',
   enableBaleJoinCheck: false,
-  baleJoinChannel: ''
+  baleJoinChannel: '',
+  socialInstagram: 'https://instagram.com/digital_store',
+  socialTelegram: 'https://t.me/digital_store',
+  socialWhatsapp: 'https://wa.me/989123456789',
+  contactPhone: '۰۹۱۲۳۴۵۶۷۸۹',
+  contactEmail: 'info@digitalstore.com',
+  contactAddress: 'تهران، خیابان ولیعصر، برج فناوری دیجیتال، طبقه ۵',
+  heroVideoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-futuristic-subway-station-with-neon-lights-40134-large.mp4'
 };
 let botUsers: Array<{
   phone: string;
@@ -70,11 +89,13 @@ function loadDatabase() {
   try {
     if (fs.existsSync(DB_FILE)) {
       const data = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+      if (data.groups) groups = data.groups;
+      if (data.subGroups) subGroups = data.subGroups;
       if (data.products) products = data.products;
       if (data.orders) orders = data.orders;
       if (data.users) users = data.users;
       if (data.chats) chats = data.chats;
-      if (data.settings) settings = data.settings;
+      if (data.settings) settings = { ...settings, ...data.settings };
       if (data.botUsers) botUsers = data.botUsers;
       if (data.tickets) tickets = data.tickets;
       if (data.transactions) transactions = data.transactions;
@@ -87,7 +108,7 @@ function loadDatabase() {
 
 function saveDatabase() {
   try {
-    const data = { products, orders, users, chats, settings, botUsers, tickets, transactions };
+    const data = { groups, subGroups, products, orders, users, chats, settings, botUsers, tickets, transactions };
     fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf8');
   } catch (err) {
     console.error('Error saving database.json:', err);
@@ -706,7 +727,92 @@ async function startServer() {
 
   // --- API Routes: Public Config ---
   app.get('/api/config', (req, res) => {
-    res.json({ enableMobileLogin: settings.enableMobileLogin });
+    res.json({ 
+      enableMobileLogin: settings.enableMobileLogin,
+      socialInstagram: settings.socialInstagram,
+      socialTelegram: settings.socialTelegram,
+      socialWhatsapp: settings.socialWhatsapp,
+      contactPhone: settings.contactPhone,
+      contactEmail: settings.contactEmail,
+      contactAddress: settings.contactAddress,
+      heroVideoUrl: settings.heroVideoUrl
+    });
+  });
+
+  // --- API Routes: Groups ---
+  app.get('/api/groups', (req, res) => res.json(groups));
+  app.post('/api/groups', (req, res) => {
+    const newGroup = { 
+      id: Date.now(), 
+      title: req.body.title, 
+      image: req.body.image || '', 
+      active: req.body.active !== false 
+    };
+    groups.push(newGroup);
+    saveDatabase();
+    res.json({ success: true, group: newGroup });
+  });
+  app.put('/api/groups/:id', (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    const index = groups.findIndex(g => g.id === id);
+    if (index !== -1) {
+      groups[index] = { ...groups[index], ...req.body };
+      saveDatabase();
+      res.json({ success: true, group: groups[index] });
+    } else {
+      res.status(404).json({ success: false, message: 'گروه پیدا نشد' });
+    }
+  });
+  app.delete('/api/groups/:id', (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    const index = groups.findIndex(g => g.id === id);
+    if (index !== -1) {
+      const deleted = groups.splice(index, 1);
+      saveDatabase();
+      res.json({ success: true, group: deleted[0] });
+    } else {
+      res.status(404).json({ success: false, message: 'گروه پیدا نشد' });
+    }
+  });
+
+  // --- API Routes: SubGroups ---
+  app.get('/api/subgroups', (req, res) => res.json(subGroups));
+  app.post('/api/subgroups', (req, res) => {
+    const newSubGroup = { 
+      id: Date.now(), 
+      groupId: parseInt(req.body.groupId, 10), 
+      title: req.body.title, 
+      image: req.body.image || '', 
+      active: req.body.active !== false 
+    };
+    subGroups.push(newSubGroup);
+    saveDatabase();
+    res.json({ success: true, subGroup: newSubGroup });
+  });
+  app.put('/api/subgroups/:id', (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    const index = subGroups.findIndex(s => s.id === id);
+    if (index !== -1) {
+      subGroups[index] = { ...subGroups[index], ...req.body };
+      if (req.body.groupId !== undefined) {
+        subGroups[index].groupId = parseInt(req.body.groupId, 10);
+      }
+      saveDatabase();
+      res.json({ success: true, subGroup: subGroups[index] });
+    } else {
+      res.status(404).json({ success: false, message: 'زیرمجموعه پیدا نشد' });
+    }
+  });
+  app.delete('/api/subgroups/:id', (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    const index = subGroups.findIndex(s => s.id === id);
+    if (index !== -1) {
+      const deleted = subGroups.splice(index, 1);
+      saveDatabase();
+      res.json({ success: true, subGroup: deleted[0] });
+    } else {
+      res.status(404).json({ success: false, message: 'زیرمجموعه پیدا نشد' });
+    }
   });
 
   // --- API Routes: Products ---

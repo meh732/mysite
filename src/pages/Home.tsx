@@ -2,20 +2,21 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Apple, Bot, MessagesSquare, Smartphone, Globe, ShoppingCart, 
-  ChevronLeft, ShieldCheck, Store, LayoutDashboard, User, 
-  Palette, Code, CheckCircle2, Loader2, Coins, ArrowRight, HelpCircle
+  ChevronLeft, ChevronRight, ChevronDown, ShieldCheck, Store, LayoutDashboard, User, 
+  Palette, Code, CheckCircle2, Loader2, Coins, ArrowRight, HelpCircle,
+  Folder, GitMerge, Sparkles, Layers, Zap, Grid, Instagram, Send, Phone, Mail, MapPin
 } from 'lucide-react';
-import { Product } from '../types';
+import { Product, Group, SubGroup } from '../types';
 import { Link, useNavigate } from 'react-router-dom';
 import ThemeSwitcher from '../components/ThemeSwitcher';
 
 const IconMap: Record<string, React.ReactNode> = {
-  Apple: <Apple className="w-8 h-8 text-white" />,
-  Bot: <Bot className="w-8 h-8 text-emerald-400" />,
-  Palette: <Palette className="w-8 h-8 text-purple-400" />,
-  Globe: <Globe className="w-8 h-8 text-blue-400" />,
-  MessageCircle: <MessagesSquare className="w-8 h-8 text-sky-400" />,
-  Smartphone: <Smartphone className="w-8 h-8 text-orange-400" />
+  Apple: <Apple className="w-8 h-8 text-indigo-500 dark:text-white" />,
+  Bot: <Bot className="w-8 h-8 text-emerald-500 dark:text-emerald-400" />,
+  Palette: <Palette className="w-8 h-8 text-purple-500 dark:text-purple-400" />,
+  Globe: <Globe className="w-8 h-8 text-blue-500 dark:text-blue-400" />,
+  MessageCircle: <MessagesSquare className="w-8 h-8 text-sky-500 dark:text-sky-400" />,
+  Smartphone: <Smartphone className="w-8 h-8 text-orange-500 dark:text-orange-400" />
 };
 
 export function formatPrice(priceVal: string | number): string {
@@ -37,6 +38,8 @@ export function formatPrice(priceVal: string | number): string {
 export default function Home() {
   const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [subGroups, setSubGroups] = useState<SubGroup[]>([]);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [authTab, setAuthTab] = useState<'login' | 'register'>('login');
   const [passwordLogin, setPasswordLogin] = useState(true);
@@ -52,6 +55,15 @@ export default function Home() {
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState('');
   const [enableMobileLogin, setEnableMobileLogin] = useState(false);
+  const [siteConfig, setSiteConfig] = useState({
+    socialInstagram: '',
+    socialTelegram: '',
+    socialWhatsapp: '',
+    contactPhone: '',
+    contactEmail: '',
+    contactAddress: '',
+    heroVideoUrl: ''
+  });
   
   // Reusable inline Toast system instead of iframe-blocked alerts
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | null }>({ message: '', type: null });
@@ -70,6 +82,8 @@ export default function Home() {
   const [quantity, setQuantity] = useState(1);
   const [orderSuccess, setOrderSuccess] = useState<any | null>(null);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
+  const [isProductsDropdownOpen, setIsProductsDropdownOpen] = useState(false);
+  const [activeSlide, setActiveSlide] = useState(0);
 
   const isLogged = !!localStorage.getItem('userEmail') || !!localStorage.getItem('userPhone') || !!localStorage.getItem('userName');
   const userIdentifier = localStorage.getItem('userName') || localStorage.getItem('userEmail') || localStorage.getItem('userPhone') || 'کاربر عزیز';
@@ -80,9 +94,34 @@ export default function Home() {
       .then(r => r.json())
       .then(d => setProducts(d));
 
+    fetch('/api/groups')
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d)) setGroups(d);
+      })
+      .catch(e => console.error(e));
+
+    fetch('/api/subgroups')
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d)) setSubGroups(d);
+      })
+      .catch(e => console.error(e));
+
     fetch('/api/config')
       .then(r => r.json())
-      .then(d => setEnableMobileLogin(d.enableMobileLogin));
+      .then(d => {
+        setEnableMobileLogin(d.enableMobileLogin);
+        setSiteConfig({
+          socialInstagram: d.socialInstagram || '',
+          socialTelegram: d.socialTelegram || '',
+          socialWhatsapp: d.socialWhatsapp || '',
+          contactPhone: d.contactPhone || '',
+          contactEmail: d.contactEmail || '',
+          contactAddress: d.contactAddress || '',
+          heroVideoUrl: d.heroVideoUrl || ''
+        });
+      });
   }, []);
 
   const handleSendOtp = (e: React.FormEvent) => {
@@ -313,11 +352,106 @@ export default function Home() {
       {/* Navbar */}
       <nav className="sticky top-0 z-50 glass-panel !rounded-none !border-x-0 !border-t-0 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-indigo-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
-              <Store className="text-white w-5 h-5" />
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/')}>
+              <div className="w-10 h-10 bg-indigo-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                <Store className="text-white w-5 h-5" />
+              </div>
+              <span className="font-bold text-xl tracking-tight hidden sm:block">دیجیتال استور</span>
             </div>
-            <span className="font-bold text-xl tracking-tight hidden sm:block">دیجیتال استور</span>
+
+            {/* Products Interactive Dropdown & Details */}
+            <div className="relative hidden md:block" onMouseLeave={() => setIsProductsDropdownOpen(false)}>
+              <button 
+                onMouseEnter={() => setIsProductsDropdownOpen(true)}
+                onClick={() => setIsProductsDropdownOpen(!isProductsDropdownOpen)}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-zinc-300 hover:text-white hover:bg-zinc-900 border border-zinc-800/40 transition-all cursor-pointer"
+              >
+                <Grid className="w-4 h-4 text-indigo-400" />
+                <span>محصولات و دسته‌بندی‌ها</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isProductsDropdownOpen ? 'rotate-180 text-indigo-400' : ''}`} />
+              </button>
+
+              <AnimatePresence>
+                {isProductsDropdownOpen && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 15, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                    className="absolute right-0 top-full mt-2 w-[600px] bg-zinc-950/95 backdrop-blur-2xl border border-zinc-850 rounded-2xl p-6 shadow-2xl z-50 grid grid-cols-2 gap-6"
+                  >
+                    {groups.filter(g => g.active !== false).map((group) => {
+                      const groupSubgroups = subGroups.filter(sg => sg.groupId === group.id && sg.active !== false);
+                      return (
+                        <div key={group.id} className="space-y-4">
+                          <div className="flex items-center gap-2 pb-2 border-b border-zinc-800/60">
+                            <span className="text-xs font-bold text-indigo-400 tracking-wide uppercase">{group.name}</span>
+                          </div>
+                          
+                          <div className="space-y-3">
+                            {groupSubgroups.map((subg) => {
+                              const subgProducts = products.filter(p => p.subGroupId === subg.id && p.active !== false);
+                              return (
+                                <div key={subg.id} className="space-y-1">
+                                  <span className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-md shadow-purple-500/50"></span>
+                                    {subg.name}
+                                  </span>
+                                  <div className="pr-3 flex flex-col gap-1 border-r border-zinc-900 mr-1">
+                                    {subgProducts.map((prod) => (
+                                      <button
+                                        key={prod.id}
+                                        onClick={() => {
+                                          setSelectedProduct(prod);
+                                          setOrderSuccess(null);
+                                          setIsProductsDropdownOpen(false);
+                                        }}
+                                        className="text-right text-[11px] text-zinc-400 hover:text-indigo-400 hover:underline transition-all block w-full py-0.5 cursor-pointer"
+                                      >
+                                        {prod.title} <span className="text-[9px] text-zinc-600">({formatPrice(prod.price)})</span>
+                                      </button>
+                                    ))}
+                                    {subgProducts.length === 0 && (
+                                      <span className="text-[10px] text-zinc-600 italic">محصولی در این زیرگروه نیست</span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+
+                            {/* Direct products */}
+                            {(() => {
+                              const directProducts = products.filter(p => p.groupId === group.id && !p.subGroupId && p.active !== false);
+                              if (directProducts.length === 0) return null;
+                              return (
+                                <div className="space-y-1">
+                                  <span className="text-xs font-semibold text-zinc-400 flex items-center gap-1">سایر موارد عمومی</span>
+                                  <div className="pr-3 flex flex-col gap-1 border-r border-zinc-900 mr-1">
+                                    {directProducts.map(prod => (
+                                      <button
+                                        key={prod.id}
+                                        onClick={() => {
+                                          setSelectedProduct(prod);
+                                          setOrderSuccess(null);
+                                          setIsProductsDropdownOpen(false);
+                                        }}
+                                        className="text-right text-[11px] text-zinc-400 hover:text-indigo-400 hover:underline transition-all block w-full py-0.5 cursor-pointer"
+                                      >
+                                        {prod.title}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
           
           <div className="flex items-center gap-4">
@@ -577,116 +711,405 @@ export default function Home() {
               )}
 
               <p className="text-[10px] text-zinc-500 text-center mt-6">
-                 شما همچنین میتوانید با استارت ربات‌های تلگرام و بله مستقیماً وارد سایت شوید.
+                شما همچنین میتوانید با استارت ربات‌های پیام‌رسان با یک کلیک ثبت نام و وارد شوید.
               </p>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-      <main className="max-w-7xl mx-auto px-6 mt-16">
-        {/* Hero Section */}
-        <div className="text-center max-w-3xl mx-auto mb-20 animate-fade-in">
-          <motion.h1 
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-4xl md:text-6xl font-bold mb-6 leading-tight"
-          >
-            آینده دیجیتال خود را <br/>
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">
-              همین امروز بسازید
-            </span>
-          </motion.h1>
-          <motion.p 
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="text-zinc-400 text-lg md:text-xl"
-          >
-            خرید آنی اپل آیدی ایمن، اکانت‌های هوش مصنوعی (ChatGPT، Midjourney) 
-            و سفارش اختصاصی طراحی سایت، بات تلگرام/بله و اپلیکیشن اندروید.
-          </motion.p>
-        </div>
+      <main className="max-w-7xl mx-auto px-6 py-12">
+        {/* Cinematic Hero Video Header Banner */}
+        {siteConfig.heroVideoUrl && (
+          <div className="relative mb-12 overflow-hidden rounded-[32px] border border-zinc-200/50 dark:border-zinc-800/60 bg-zinc-950/40 h-[340px] md:h-[420px] flex items-center justify-center text-center p-8 shadow-2xl">
+            {/* Background Video */}
+            <video 
+              autoPlay 
+              loop 
+              muted 
+              playsInline 
+              className="absolute inset-0 w-full h-full object-cover opacity-35 pointer-events-none"
+            >
+              <source src={siteConfig.heroVideoUrl} type="video/mp4" />
+            </video>
+            
+            {/* Subtle Gradient Overlay */}
+            <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/50 to-indigo-950/25 pointer-events-none" />
+            <div className="absolute inset-0 bg-radial from-indigo-500/10 via-transparent to-transparent pointer-events-none" />
 
-        {/* Categories / Products */}
-        <div className="space-y-20">
-          
-          {/* Accounts */}
-          <section>
-            <div className="flex items-center justify-between mb-8">
-              <h2 className="text-2xl font-bold flex items-center gap-3">
-                <ShieldCheck className="w-6 h-6 text-indigo-400 animate-pulse" />
-                اکانت‌های آماده (تحویل خودکار)
-              </h2>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {accounts.map((prod, i) => (
-                <motion.div 
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.08 }}
-                  key={prod.id} 
-                  onClick={() => { setSelectedProduct(prod); setOrderSuccess(null); }}
-                  className="glass-panel p-6 hover:border-indigo-500/50 transition-all duration-300 group cursor-pointer hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-500/5"
+            {/* Dynamic Slogan Text Content */}
+            <div className="relative z-10 max-w-2xl mx-auto space-y-6">
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-indigo-400 text-xs font-bold uppercase tracking-wider animate-pulse">
+                <Sparkles className="w-4 h-4 text-indigo-400 animate-spin-slow" />
+                <span>بروزرسانی زنده و هوشمند</span>
+              </div>
+              <h1 className="text-3xl md:text-5xl font-black text-white leading-tight tracking-tight drop-shadow-md">
+                فناوری نوین، <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-indigo-300">در دستان شما</span>
+              </h1>
+              <p className="text-zinc-300 text-xs md:text-sm max-w-lg mx-auto leading-relaxed drop-shadow">
+                باکیفیت‌ترین لایسنس‌ها، اشتراک‌های ویژه، و خدمات برنامه‌نویسی و بات‌های هوشمند را در محیطی مدرن به صورت آنی دریافت کنید.
+              </p>
+              
+              <div className="flex items-center justify-center gap-4 pt-2">
+                <a 
+                  href="#products" 
+                  className="bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-xs md:text-sm px-6 py-3 rounded-full transition-all shadow-lg shadow-indigo-500/20 cursor-pointer"
                 >
-                  <div className="w-16 h-16 rounded-2xl bg-zinc-800/40 flex items-center justify-center mb-6 border border-zinc-800/80 group-hover:scale-105 group-hover:border-indigo-500/30 transition-all">
-                    {IconMap[prod.icon] || <Coins className="text-indigo-400 w-8 h-8" />}
+                  مشاهده دسته‌بندی‌ها
+                </a>
+                {siteConfig.contactPhone && (
+                  <a 
+                    href={`tel:${siteConfig.contactPhone}`} 
+                    className="bg-zinc-900/30 hover:bg-zinc-900/60 text-zinc-300 border border-zinc-800 font-bold text-xs md:text-sm px-6 py-3 rounded-full transition-all cursor-pointer backdrop-blur-md"
+                  >
+                    ارتباط با پشتیبانی
+                  </a>
+                )}
+              </div>
+            </div>
+            
+            {/* Decorative bottom fade line */}
+            <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-zinc-950 to-transparent pointer-events-none" />
+          </div>
+        )}
+
+        {/* --- Modern Dynamic Slideshow & Bento Tiles Section --- */}
+        {products.filter(p => p.active !== false).length > 0 && (
+          <div className="grid grid-cols-12 gap-6 mb-16">
+            
+            {/* Cinematic Slider - Col Span 8 */}
+            <div className="col-span-12 lg:col-span-8 relative group overflow-hidden rounded-3xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-100/60 dark:bg-zinc-950/40 p-1 backdrop-blur-md">
+              <div className="relative h-[340px] md:h-[380px] w-full overflow-hidden rounded-[22px] bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-zinc-950/20 flex flex-col justify-between p-6 sm:p-10">
+                
+                {/* Background glow animation */}
+                <div className="absolute inset-0 bg-radial from-indigo-500/10 via-transparent to-transparent pointer-events-none opacity-80 group-hover:scale-110 transition-transform duration-700" />
+                
+                {/* Slider Header */}
+                <div className="flex items-center justify-between z-10">
+                  <div className="flex items-center gap-1.5 px-3.5 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-full">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400 animate-pulse" />
+                    <span className="text-[11px] font-extrabold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">پیشنهاد برگزیده دیجیتال استور</span>
                   </div>
-                  <h3 className="text-xl font-bold mb-2 text-zinc-100 group-hover:text-indigo-300 transition-colors">{prod.title}</h3>
-                  <p className="text-zinc-400 text-sm mb-6 h-10 line-clamp-2">{prod.desc}</p>
-                  <div className="flex items-center justify-between mt-auto pt-4 border-t border-zinc-800/50">
-                    <span className="text-indigo-400 font-bold">{formatPrice(prod.price)}</span>
-                    <button className="w-10 h-10 rounded-full bg-zinc-900 group-hover:bg-indigo-500 border border-zinc-800 group-hover:border-indigo-400 flex items-center justify-center transition-colors">
-                      <ChevronLeft className="w-5 h-5 text-white" />
+                  <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-550">
+                    {activeSlide + 1} از {products.filter(p => p.active !== false).slice(0, 4).length}
+                  </span>
+                </div>
+
+                {/* Slides Animation */}
+                <div className="relative flex-grow flex items-center z-10 py-4">
+                  <AnimatePresence mode="wait">
+                    {products.filter(p => p.active !== false).slice(0, 4).map((prod, index) => {
+                      if (index !== activeSlide) return null;
+                      return (
+                        <motion.div
+                          key={prod.id}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: 20 }}
+                          transition={{ duration: 0.35 }}
+                          className="w-full text-right space-y-4"
+                        >
+                          <div className="space-y-2">
+                            <h2 className="text-2xl sm:text-3xl font-black text-zinc-905 dark:text-white tracking-tight leading-none">
+                              {prod.title}
+                            </h2>
+                            <p className="text-zinc-500 dark:text-zinc-400 text-xs sm:text-sm max-w-xl leading-relaxed line-clamp-2">
+                              {prod.desc}
+                            </p>
+                          </div>
+                          
+                          <div className="flex flex-wrap items-center gap-4 pt-1">
+                            <div className="text-xs sm:text-sm bg-zinc-200/50 dark:bg-zinc-900/60 border border-zinc-300 dark:border-zinc-800 px-4 py-2 rounded-xl text-zinc-700 dark:text-zinc-300 font-bold">
+                              قیمت استثنایی: {formatPrice(prod.price)}
+                            </div>
+                            <button
+                              onClick={() => {
+                                setSelectedProduct(prod);
+                                setOrderSuccess(null);
+                              }}
+                              className="bg-indigo-600 hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white font-bold text-xs sm:text-sm px-6 py-3 rounded-xl transition-all shadow-lg shadow-indigo-500/20 flex items-center gap-2 cursor-pointer"
+                            >
+                              <span>خرید و سفارش فوری</span>
+                              <ArrowRight className="w-4 h-4 translate-y-[1px] rotate-180" />
+                            </button>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </AnimatePresence>
+                </div>
+
+                {/* Dots / Manual Triggers */}
+                <div className="flex items-center justify-between z-10 pt-4 border-t border-zinc-200/50 dark:border-zinc-900/40">
+                  <div className="flex items-center gap-2">
+                    {products.filter(p => p.active !== false).slice(0, 4).map((_, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setActiveSlide(idx)}
+                        className={`h-2 rounded-full transition-all duration-300 ${idx === activeSlide ? 'w-6 bg-indigo-500' : 'w-2 bg-zinc-300 dark:bg-zinc-800'}`}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Manual Arrow Controls */}
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => {
+                        const len = products.filter(p => p.active !== false).slice(0, 4).length;
+                        setActiveSlide(p => (p - 1 + len) % len);
+                      }}
+                      className="w-9 h-9 rounded-xl bg-zinc-200 dark:bg-zinc-900 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-500 border border-zinc-300 dark:border-zinc-800 flex items-center justify-center transition-colors cursor-pointer"
+                    >
+                      <ChevronRight className="w-5 h-5 animate-none rotate-180" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        const len = products.filter(p => p.active !== false).slice(0, 4).length;
+                        setActiveSlide(p => (p + 1) % len);
+                      }}
+                      className="w-9 h-9 rounded-xl bg-zinc-200 dark:bg-zinc-900 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-500 border border-zinc-300 dark:border-zinc-800 flex items-center justify-center transition-colors cursor-pointer"
+                    >
+                      <ChevronLeft className="w-5 h-5 animate-none rotate-180" />
                     </button>
                   </div>
-                </motion.div>
-              ))}
-              {accounts.length === 0 && (
-                <div className="col-span-full text-center py-12 text-zinc-500">اکانت فعالی در حال حاضر ثبت نشده است.</div>
-              )}
-            </div>
-          </section>
+                </div>
 
-          {/* Services */}
-          <section>
-            <div className="flex items-center justify-between mb-8">
-              <h2 className="text-2xl font-bold flex items-center gap-3">
-                <Code className="w-6 h-6 text-purple-400" />
-                سفارش خدمات توسعه (طراحی اختصاصی)
-              </h2>
+              </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {services.map((prod, i) => (
-                <motion.div 
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 + (i * 0.08) }}
-                  key={prod.id}
-                  onClick={() => { setSelectedProduct(prod); setOrderSuccess(null); }}
-                  className="glass-panel p-6 hover:border-purple-500/50 transition-all duration-300 group cursor-pointer flex flex-col hover:-translate-y-1 hover:shadow-lg hover:shadow-purple-500/5"
-                >
-                  <div className="w-16 h-16 rounded-2xl bg-zinc-800/40 flex items-center justify-center mb-6 border border-zinc-800/80 group-hover:border-purple-500/30 transition-all">
-                    {IconMap[prod.icon] || <Code className="text-purple-400 w-8 h-8" />}
-                  </div>
-                  <h3 className="text-xl font-bold mb-2 text-zinc-100 group-hover:text-purple-300 transition-colors">{prod.title}</h3>
-                  <p className="text-zinc-400 text-sm mb-6 flex-grow line-clamp-3">{prod.desc}</p>
-                  <div className="flex items-center justify-between mt-auto pt-4 border-t border-zinc-800/50">
-                    <span className="text-zinc-300 font-medium text-sm">شروع قیمت: {formatPrice(prod.price)}</span>
-                    <button className="text-sm text-purple-400 font-medium hover:text-purple-300 flex items-center gap-1 group-hover:translate-x-[-4px] transition-transform">
-                      <span>مشاوره و سفارش</span> 
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
-                  </div>
-                </motion.div>
-              ))}
-              {services.length === 0 && (
-                <div className="col-span-full text-center py-12 text-zinc-500">خدمات فعالی در حال حاضر ثبت نشده است.</div>
-              )}
-            </div>
-          </section>
 
+            {/* Special Bento Tiles - Col Span 4 */}
+            <div className="col-span-12 lg:col-span-4 flex flex-col gap-4">
+              
+              {/* Tile 1: Delivery badge */}
+              <div className="group flex-1 bg-gradient-to-br from-emerald-500/5 via-teal-500/5 to-transparent border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl p-5 flex items-start gap-4 backdrop-blur-sm hover:border-emerald-500/30 transition-all duration-300">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 flex-shrink-0 shadow-inner group-hover:scale-105 transition-transform">
+                  <Zap className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-zinc-850 dark:text-zinc-100 mb-1 flex items-center gap-1.5">
+                    تحویل آنی اکانت‌ها
+                    <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-600 animate-pulse" />
+                  </h3>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                    بلافاصله پس از تکمیل ثبت سفارش، لایسنس و اطلاعات اکانت به صورت خودکار پیام‌رسانی و ارسال می‌شود.
+                  </p>
+                </div>
+              </div>
+
+              {/* Tile 2: Support badge */}
+              <div className="group flex-1 bg-gradient-to-br from-purple-500/5 via-violet-500/5 to-transparent border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl p-5 flex items-start gap-4 backdrop-blur-sm hover:border-purple-500/30 transition-all duration-300">
+                <div className="w-12 h-12 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-500 flex-shrink-0 shadow-inner group-hover:scale-105 transition-transform">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-zinc-850 dark:text-zinc-100 mb-1">پشتیبانی ۲۴ ساعته مطمئن</h3>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                    تیم مجرب پشتیبانی دیجیتال استور در هر ساعت از شبانه‌روز آماده پاسخگویی و راهنمایی شما عزیزان است.
+                  </p>
+                </div>
+              </div>
+
+              {/* Tile 3: Safety badge */}
+              <div className="group flex-1 bg-gradient-to-br from-indigo-500/5 via-blue-500/5 to-transparent border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl p-5 flex items-start gap-4 backdrop-blur-sm hover:border-indigo-500/30 transition-all duration-300">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-500 flex-shrink-0 shadow-inner group-hover:scale-105 transition-transform">
+                  <ShieldCheck className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-zinc-850 dark:text-zinc-100 mb-1">کاشی امنیت خرید شما</h3>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                    پرداختی کاملاً امن تحت پروتکل‌های رمزنگاری شده و گارانتی ۱۰۰ درصدی بازگشت وجه در صورت بروز مشکل.
+                  </p>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        )}
+
+        {/* Categories / Products Hierarchical Display */}
+        <div className="space-y-16">
+          {groups.filter(g => g.active !== false).map((group, gIdx) => {
+            const groupSubGroups = subGroups.filter(sg => sg.groupId === group.id && sg.active !== false);
+            // Products directly or indirectly in this group
+            const groupProducts = products.filter(p => p.groupId === group.id && p.active !== false);
+
+            if (groupProducts.length === 0 && groupSubGroups.length === 0) return null;
+
+            return (
+              <section key={group.id} className="bg-zinc-900/10 dark:bg-zinc-950/20 p-6 rounded-3xl border border-zinc-200/50 dark:border-zinc-800/50 backdrop-blur-sm">
+                {/* Group Title Area */}
+                <div className="flex items-center gap-4 mb-8 border-b border-zinc-200/80 dark:border-zinc-850/50 pb-5">
+                  <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center overflow-hidden flex-shrink-0">
+                    {group.image ? (
+                      <img src={group.image} alt={group.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      <Folder className="w-7 h-7 text-indigo-500 dark:text-indigo-400" />
+                    )}
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-extrabold text-zinc-900 dark:text-zinc-50">{group.name}</h2>
+                    {group.description && <p className="text-zinc-500 dark:text-zinc-400 text-xs mt-1">{group.description}</p>}
+                  </div>
+                </div>
+
+                {/* Subgroups & Products inside subgroups */}
+                <div className="space-y-12">
+                  {groupSubGroups.map((subGroup) => {
+                    const subGroupProducts = groupProducts.filter(p => p.subGroupId === subGroup.id);
+                    if (subGroupProducts.length === 0) return null;
+
+                    return (
+                      <div key={subGroup.id} className="space-y-6">
+                        {/* Subgroup Heading */}
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center overflow-hidden flex-shrink-0">
+                            {subGroup.image ? (
+                              <img src={subGroup.image} alt={subGroup.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                            ) : (
+                              <GitMerge className="w-4 h-4 text-purple-500 dark:text-purple-400" />
+                            )}
+                          </div>
+                          <h3 className="text-lg font-bold text-zinc-800 dark:text-zinc-200">{subGroup.name}</h3>
+                        </div>
+
+                        {/* Products Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                          {subGroupProducts.map((prod, i) => (
+                            <motion.div 
+                              initial={{ opacity: 0, y: 15 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: i * 0.05 }}
+                              key={prod.id} 
+                              onClick={() => { setSelectedProduct(prod); setOrderSuccess(null); }}
+                              className="glass-panel p-6 hover:border-indigo-500/50 dark:hover:border-indigo-400/50 transition-all duration-300 group cursor-pointer hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-500/5 flex flex-col justify-between"
+                            >
+                              <div>
+                                <div className="w-16 h-16 rounded-2xl bg-zinc-100 dark:bg-zinc-800/40 flex items-center justify-center mb-6 border border-zinc-200 dark:border-zinc-800/80 group-hover:scale-105 group-hover:border-indigo-500/30 transition-all overflow-hidden">
+                                  {prod.image ? (
+                                    <img src={prod.image} alt={prod.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                  ) : (
+                                    IconMap[prod.icon] || <Coins className="text-indigo-500 dark:text-indigo-400 w-8 h-8" />
+                                  )}
+                                </div>
+                                <h3 className="text-xl font-bold mb-2 text-zinc-800 dark:text-zinc-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors">{prod.title}</h3>
+                                <p className="text-zinc-500 dark:text-zinc-400 text-sm mb-6 h-10 line-clamp-2">{prod.desc}</p>
+                              </div>
+                              <div className="flex items-center justify-between mt-auto pt-4 border-t border-zinc-200/50 dark:border-zinc-800/50">
+                                <span className="text-indigo-600 dark:text-indigo-400 font-bold">{formatPrice(prod.price)}</span>
+                                <button className="w-10 h-10 rounded-full bg-zinc-200 dark:bg-zinc-900 group-hover:bg-indigo-600 dark:group-hover:bg-indigo-500 border border-zinc-300 dark:border-zinc-800 group-hover:border-indigo-400 flex items-center justify-center transition-colors">
+                                  <ChevronLeft className="w-5 h-5 text-zinc-700 dark:text-white" />
+                                </button>
+                              </div>
+                            </motion.div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Products in this group but not assigned to any subgroup */}
+                  {(() => {
+                    const ungroupedGroupProducts = groupProducts.filter(p => !p.subGroupId);
+                    if (ungroupedGroupProducts.length === 0) return null;
+
+                    return (
+                      <div className="space-y-6">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-xl bg-zinc-450/10 border border-zinc-500/20 flex items-center justify-center flex-shrink-0">
+                            <Folder className="w-4 h-4 text-zinc-500" />
+                          </div>
+                          <h3 className="text-lg font-bold text-zinc-800 dark:text-zinc-200">سایر موارد عمومی</h3>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                          {ungroupedGroupProducts.map((prod, i) => (
+                            <motion.div 
+                              initial={{ opacity: 0, y: 15 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: i * 0.05 }}
+                              key={prod.id} 
+                              onClick={() => { setSelectedProduct(prod); setOrderSuccess(null); }}
+                              className="glass-panel p-6 hover:border-indigo-500/50 dark:hover:border-indigo-400/50 transition-all duration-300 group cursor-pointer hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-500/5 flex flex-col justify-between"
+                            >
+                              <div>
+                                <div className="w-16 h-16 rounded-2xl bg-zinc-100 dark:bg-zinc-800/40 flex items-center justify-center mb-6 border border-zinc-200 dark:border-zinc-800/80 group-hover:scale-105 group-hover:border-indigo-500/30 transition-all overflow-hidden">
+                                  {prod.image ? (
+                                    <img src={prod.image} alt={prod.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                  ) : (
+                                    IconMap[prod.icon] || <Coins className="text-indigo-500 dark:text-indigo-400 w-8 h-8" />
+                                  )}
+                                </div>
+                                <h3 className="text-xl font-bold mb-2 text-zinc-800 dark:text-zinc-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors">{prod.title}</h3>
+                                <p className="text-zinc-500 dark:text-zinc-400 text-sm mb-6 h-10 line-clamp-2">{prod.desc}</p>
+                              </div>
+                              <div className="flex items-center justify-between mt-auto pt-4 border-t border-zinc-200/50 dark:border-zinc-800/50">
+                                <span className="text-indigo-600 dark:text-indigo-400 font-bold">{formatPrice(prod.price)}</span>
+                                <button className="w-10 h-10 rounded-full bg-zinc-200 dark:bg-zinc-900 group-hover:bg-indigo-600 dark:group-hover:bg-indigo-500 border border-zinc-300 dark:border-zinc-800 group-hover:border-indigo-400 flex items-center justify-center transition-colors">
+                                  <ChevronLeft className="w-5 h-5 text-zinc-700 dark:text-white" />
+                                </button>
+                              </div>
+                            </motion.div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </section>
+            );
+          })}
         </div>
+
+        {/* Fallback Section for uncategorized products */}
+        {(() => {
+          const ungroupedProducts = products.filter(p => !p.groupId && p.active !== false);
+          if (ungroupedProducts.length === 0) return null;
+
+          return (
+            <section className="bg-zinc-900/10 dark:bg-zinc-950/20 p-6 rounded-3xl border border-zinc-200/50 dark:border-zinc-800/50 backdrop-blur-sm mt-16">
+              <div className="flex items-center gap-4 mb-8 border-b border-zinc-200/80 dark:border-zinc-850/50 pb-5">
+                <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center overflow-hidden flex-shrink-0">
+                  <Coins className="w-7 h-7 text-indigo-500 dark:text-indigo-400" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-extrabold text-zinc-900 dark:text-zinc-50">سایر محصولات نایاب</h2>
+                  <p className="text-zinc-500 dark:text-zinc-400 text-xs mt-1">سایر سرویس‌های عمومی و لایسنس‌های ارائه شده توسط دیجیتال استور</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {ungroupedProducts.map((prod, i) => (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.05 }}
+                    key={prod.id} 
+                    onClick={() => { setSelectedProduct(prod); setOrderSuccess(null); }}
+                    className="glass-panel p-6 hover:border-indigo-500/50 dark:hover:border-indigo-400/50 transition-all duration-300 group cursor-pointer hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-500/5 flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="w-16 h-16 rounded-2xl bg-zinc-100 dark:bg-zinc-800/40 flex items-center justify-center mb-6 border border-zinc-200 dark:border-zinc-800/80 group-hover:scale-105 group-hover:border-indigo-500/30 transition-all overflow-hidden">
+                        {prod.image ? (
+                          <img src={prod.image} alt={prod.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          IconMap[prod.icon] || <Coins className="text-indigo-500 dark:text-indigo-400 w-8 h-8" />
+                        )}
+                      </div>
+                      <h3 className="text-xl font-bold mb-2 text-zinc-800 dark:text-zinc-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors">{prod.title}</h3>
+                      <p className="text-zinc-500 dark:text-zinc-400 text-sm mb-6 h-10 line-clamp-2">{prod.desc}</p>
+                    </div>
+                    <div className="flex items-center justify-between mt-auto pt-4 border-t border-zinc-200/50 dark:border-zinc-800/50">
+                      <span className="text-indigo-600 dark:text-indigo-400 font-bold">{formatPrice(prod.price)}</span>
+                      <button className="w-10 h-10 rounded-full bg-zinc-200 dark:bg-zinc-900 group-hover:bg-indigo-600 dark:group-hover:bg-indigo-500 border border-zinc-300 dark:border-zinc-800 group-hover:border-indigo-400 flex items-center justify-center transition-colors">
+                        <ChevronLeft className="w-5 h-5 text-zinc-700 dark:text-white" />
+                      </button>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </section>
+          );
+        })()}
       </main>
 
       {/* --- Glassmorphic Checkout and Lot Menus (شیشه‌ای و راحت) --- */}
@@ -992,6 +1415,112 @@ export default function Home() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Premium Glassmorphic Footer with Admin Socials & Contact Coordinates */}
+      <footer className="mt-20 border-t border-zinc-200/50 dark:border-zinc-850 bg-zinc-100/30 dark:bg-zinc-950/40 backdrop-blur-3xl">
+        <div className="max-w-7xl mx-auto px-6 py-12 grid grid-cols-1 md:grid-cols-3 gap-12 text-right">
+          
+          {/* Col 1: Brand & Slogan */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <div className="w-10 h-10 bg-indigo-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                <Store className="text-white w-5 h-5" />
+              </div>
+              <span className="font-extrabold text-lg text-zinc-900 dark:text-white font-sans">دیجیتال استور</span>
+            </div>
+            <p className="text-xs text-zinc-550 dark:text-zinc-400 leading-relaxed max-w-sm">
+              بزرگ‌ترین مرجع تخصصی ارائه اکانت‌های بین‌المللی، اشتراک‌های دیجیتالی، سایت و ربات‌های فوق پیشرفته تلگرام و بله با تحویل فوری و گارانتی طلایی بازگشت هزینه.
+            </p>
+            
+            {/* Social Icons based on configuration */}
+            <div className="flex items-center gap-3 pt-2">
+              {siteConfig.socialInstagram && (
+                <a 
+                  href={siteConfig.socialInstagram} 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="w-9 h-9 rounded-xl bg-zinc-200/55 dark:bg-zinc-900 hover:bg-pink-650/10 hover:text-pink-500 border border-zinc-300 dark:border-zinc-800 flex items-center justify-center transition-all shadow-inner"
+                >
+                  <Instagram className="w-4 h-4" />
+                </a>
+              )}
+              {siteConfig.socialTelegram && (
+                <a 
+                  href={siteConfig.socialTelegram} 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="w-9 h-9 rounded-xl bg-zinc-200/55 dark:bg-zinc-900 hover:bg-sky-655/10 hover:text-sky-400 border border-zinc-300 dark:border-zinc-800 flex items-center justify-center transition-all shadow-inner"
+                >
+                  <Send className="w-4 h-4" />
+                </a>
+              )}
+              {siteConfig.socialWhatsapp && (
+                <a 
+                  href={siteConfig.socialWhatsapp} 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="w-9 h-9 rounded-xl bg-zinc-200/55 dark:bg-zinc-900 hover:bg-emerald-655/10 hover:text-emerald-400 border border-zinc-300 dark:border-zinc-800 flex items-center justify-center transition-all shadow-inner"
+                >
+                  <MessagesSquare className="w-4 h-4 text-emerald-400" />
+                </a>
+              )}
+            </div>
+          </div>
+
+          {/* Col 2: High-availability Links */}
+          <div className="space-y-4">
+            <h4 className="font-bold text-sm text-zinc-900 dark:text-zinc-100 pb-2 border-b border-zinc-200/50 dark:border-zinc-850 max-w-xs font-sans">دسترسی سریع</h4>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="flex flex-col gap-2.5">
+                <a href="#products" className="text-zinc-550 dark:text-zinc-400 hover:text-indigo-400 transition-colors">محصولات دیجیتال</a>
+                <a href="/admin" className="text-zinc-550 dark:text-zinc-400 hover:text-indigo-400 transition-colors">پنل کارمندان</a>
+                <a href="/dashboard" className="text-zinc-550 dark:text-zinc-400 hover:text-indigo-400 transition-colors font-semibold">حساب کاربری من</a>
+              </div>
+              <div className="flex flex-col gap-2.5">
+                <button onClick={() => { setIsLoginModalOpen(true); setAuthTab('register'); }} className="text-right text-zinc-550 dark:text-zinc-400 hover:text-indigo-400 transition-colors cursor-pointer">عضویت زودهنگام</button>
+                <span className="text-zinc-500/80 dark:text-zinc-600 text-[11px]">تحویل آنی ۲۴ ساعته</span>
+                <span className="text-zinc-500/80 dark:text-zinc-650 text-[11px]">پروتکل امن پرداخت</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Col 3: Contact Coordinates */}
+          <div className="space-y-4">
+            <h4 className="font-bold text-sm text-zinc-900 dark:text-zinc-100 pb-2 border-b border-zinc-200/50 dark:border-zinc-850 max-w-xs font-sans">ارتباط با ما</h4>
+            <div className="space-y-3.5 text-xs text-zinc-550 dark:text-zinc-350">
+              {siteConfig.contactPhone && (
+                <div className="flex items-center justify-end gap-2">
+                  <span className="font-mono text-zinc-800 dark:text-zinc-200">{siteConfig.contactPhone}</span>
+                  <Phone className="w-4 h-4 text-indigo-400" />
+                </div>
+              )}
+              {siteConfig.contactEmail && (
+                <div className="flex items-center justify-end gap-2">
+                  <span className="font-mono text-zinc-850 dark:text-zinc-200">{siteConfig.contactEmail}</span>
+                  <Mail className="w-4 h-4 text-indigo-400" />
+                </div>
+              )}
+              {siteConfig.contactAddress && (
+                <div className="flex items-start justify-end gap-2">
+                  <span className="leading-relaxed max-w-[200px] text-zinc-850 dark:text-zinc-300">{siteConfig.contactAddress}</span>
+                  <MapPin className="w-4 h-4 text-indigo-400 mt-0.5 flex-shrink-0" />
+                </div>
+              )}
+              {!siteConfig.contactPhone && !siteConfig.contactEmail && !siteConfig.contactAddress && (
+                <span className="italic text-zinc-550 text-[11px] text-center block">تلفن و آدرس تماس توسط ادمین ثبت نشده است.</span>
+              )}
+            </div>
+          </div>
+
+        </div>
+
+        {/* Outer bottom copyright rail */}
+        <div className="border-t border-zinc-200/30 dark:border-zinc-900 bg-zinc-250/10 dark:bg-zinc-950/80 py-4 text-center">
+          <p className="text-[10px] text-zinc-400">
+            تمامی حقوق مادی و معنوی محفوظ و متعلق به دیجیتال استور می‌باشد © {new Date().getFullYear()}
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }
