@@ -107,22 +107,22 @@ export default function UserDashboard() {
       </nav>
 
       <main className="max-w-6xl mx-auto px-6 py-12 flex flex-col md:flex-row gap-8">
-        {/* Sidebar Nav */}
-        <aside className="w-full md:w-64 flex flex-col gap-2 relative">
-          <div className="sticky top-24 space-y-2">
+        {/* Sidebar Nav - Mobile horizontal scrollable, Desktop vertical list */}
+        <aside className="w-full md:w-64 flex-shrink-0">
+          <div className="sticky top-24 flex md:flex-col gap-2 overflow-x-auto md:overflow-x-visible pb-3 md:pb-0 scrollbar-none md:space-y-2 whitespace-nowrap">
             {[
               { id: 'orders', label: 'سفارشات من' },
-              { id: 'chat', label: 'پشتیبانی و مشاوره آنلاین' },
-              { id: 'domain', label: 'خدمات دامنه و SSL' },
-              { id: 'deploy', label: 'دیپلوی و اسکریپت نصب' }
+              { id: 'chat', label: 'پشتیبانی آنلاین' },
+              { id: 'domain', label: 'ثبت دامنه‌های من' },
+              { id: 'deploy', label: 'نصب و اجرای کانفیگ' }
             ].map(tab => (
               <button 
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`w-full text-right px-5 py-3.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
+                className={`px-5 py-3 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer flex-shrink-0 text-center md:text-right ${
                   activeTab === tab.id 
                     ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' 
-                    : 'text-zinc-450 text-zinc-450 hover:bg-zinc-900 hover:text-white'
+                    : 'text-zinc-400 bg-zinc-900/30 md:bg-transparent hover:bg-zinc-900 hover:text-white'
                 }`}
               >
                 {tab.label}

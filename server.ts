@@ -168,13 +168,28 @@ async function sendBotDocument(apiHost: string, token: string, chatId: number, f
 
 // Process incoming bot chat messages
 async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
-  const message = update.message || update.edited_message;
+  let isCallback = false;
+  let callbackQueryId = '';
+  let callbackData = '';
+
+  let message = update.message || update.edited_message;
+  if (update.callback_query) {
+    isCallback = true;
+    callbackQueryId = update.callback_query.id;
+    callbackData = update.callback_query.data;
+    message = update.callback_query.message;
+  }
+
   if (!message) return;
 
   const chat = message.chat;
   if (!chat || !chat.id) return;
 
-  const text = message.text ? message.text.trim() : '';
+  let text = message.text ? message.text.trim() : '';
+  if (isCallback && callbackData) {
+    text = callbackData;
+  }
+
   const contact = message.contact;
   const platformName = platform === 'telegram' ? 'تلگرام' : 'بله';
   const apiHost = platform === 'telegram' ? 'https://api.telegram.org' : 'https://tapi.bale.ai';
@@ -186,6 +201,18 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
       text: textMsg,
       reply_markup: replyMarkup
     });
+  }
+
+  // Answer callback queries to resolve client loading spinner
+  if (isCallback && callbackQueryId) {
+    try {
+      botRequest(apiHost, token, 'answerCallbackQuery', {
+        callback_query_id: callbackQueryId,
+        text: 'در حال پردازش...'
+      }).catch(err => console.error('Error answering callback:', err));
+    } catch (e) {
+      // Ignored
+    }
   }
 
   // Determine if sender is Admin based on Telegram/Bale specific settings or fallback
@@ -391,12 +418,19 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
       shopMsg += `🔹 ${idx + 1}. **${p.title}** (${typeFa})\n`;
       if (p.desc) shopMsg += `📝 توضیحات: *${p.desc}*\n`;
       shopMsg += `💰 قیمت: **${p.price}**\n`;
-      shopMsg += `📥 **سفارش آسان**: عدد \`${p.id}\` یا بنویسید: \`سفارش ${p.id}\`\n`;
       shopMsg += `------------------------------------\n`;
     });
-    shopMsg += `\n💡 جهت سفارش سریع هر یک از محصولات فوق، کافیست کد شناسه محصول (مثلاً: *${activeProducts[0].id}* یا عدد خالی) را ارسال نمایید.`;
+    shopMsg += `\n💡 جهت ثبت سفارش فوری، کافیست روی نام محصول در دکمه‌های شیشه‌ای زیر ضربه بزنید یا کد شناسه محصول را برای ربات بفرستید.`;
     
-    await reply(shopMsg, getUserKeyboard(isAdmin));
+    // Glassy Inline Keyboard Menu
+    const inline_keyboard = activeProducts.map(p => [
+      { text: `🛍️ سفارش ${p.title} (${p.price})`, callback_data: `buy_${p.id}` }
+    ]);
+
+    await reply(shopMsg, {
+      inline_keyboard,
+      resize_keyboard: true
+    });
     return;
   }
 
@@ -506,7 +540,7 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
   // Check 6: Check if user input is an ID of a product or a text like "سفارش 2"
   let possibleProductId: number | null = null;
   const matchNum = text.replace(/[^0-9]/g, '');
-  if (text.startsWith('سفارش') || text.startsWith('خرید') || text.startsWith('ID')) {
+  if (text.startsWith('buy_') || text.startsWith('سفارش') || text.startsWith('خرید') || text.startsWith('ID')) {
     const matchVal = text.match(/\d+/);
     if (matchVal) possibleProductId = parseInt(matchVal[0], 10);
   } else if (/^\d+$/.test(matchNum)) {

@@ -28,6 +28,15 @@ export default function Home() {
   const [otpCode, setOtpCode] = useState('');
   const [enableMobileLogin, setEnableMobileLogin] = useState(false);
   
+  // Reusable inline Toast system instead of iframe-blocked alerts
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | null }>({ message: '', type: null });
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setToast({ message, type });
+    setTimeout(() => {
+      setToast(prev => prev.message === message ? { message: '', type: null } : prev);
+    }, 4500);
+  };
+  
   // --- Active Lot/Product Detail Modal State ---
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [additionalDetails, setAdditionalDetails] = useState('');
@@ -68,10 +77,12 @@ export default function Home() {
       if(res.success) {
         setOtpSent(true);
         if (loginMethod === 'phone') {
-          alert('کد تایید به تلگرام و بله شما ارسال شد (در صورت شروع ربات)');
+          showToast('کد تایید ۲ عاملی به تلگرام و بله شما فرستاده شد (ربات را ابتدا استارت کنید)', 'success');
+        } else {
+          showToast('کد ورود به ایمیل شما فرستاده شد.', 'success');
         }
       } else {
-        alert(res.message || 'خطا در ارسال کد');
+        showToast(res.message || 'خطا در ارسال کد', 'error');
       }
     });
   };
@@ -106,7 +117,7 @@ export default function Home() {
           navigate('/dashboard');
         }
       } else {
-        alert(res.message || 'کد وارد شده نامعتبر است');
+        showToast(res.message || 'کد وارد شده نامعتبر است', 'error');
       }
     });
   };
@@ -142,13 +153,14 @@ export default function Home() {
         setAdditionalDetails('');
         setCustomDomain(false);
         setQuantity(1);
+        showToast('سفارش شما با موفقیت ثبت شد!', 'success');
       } else {
-        alert(res.message || 'خطا در ثبت سفارش');
+        showToast(res.message || 'خطا در ثبت سفارش', 'error');
       }
     })
     .catch(() => {
       setIsSubmittingOrder(false);
-      alert('خطا در ارتباط با وب‌سرور');
+      showToast('خطا در ارتباط با وب‌سرور دیتابیس', 'error');
     });
   };
 
@@ -158,6 +170,34 @@ export default function Home() {
 
   return (
     <div className="min-h-screen pb-24 relative bg-zinc-950 text-zinc-100">
+      
+      {/* Toast Alert Banner */}
+      <AnimatePresence>
+        {toast.message && (
+          <motion.div 
+            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            className="fixed bottom-6 left-6 right-6 md:right-auto md:left-6 z-[100] max-w-sm"
+          >
+            <div className={`p-4 rounded-2xl backdrop-blur-xl border shadow-xl flex items-center justify-between gap-3 ${
+              toast.type === 'success' 
+                ? 'bg-emerald-950/90 border-emerald-500/40 text-emerald-300 shadow-emerald-950/20' 
+                : toast.type === 'error' 
+                ? 'bg-red-950/90 border-red-500/40 text-red-300 shadow-red-950/20' 
+                : 'bg-zinc-900/90 border-zinc-700/50 text-indigo-300 shadow-zinc-950/20'
+            }`}>
+              <span className="text-xs font-semibold">{toast.message}</span>
+              <button 
+                onClick={() => setToast({ message: '', type: null })}
+                className="text-zinc-400 hover:text-white cursor-pointer text-sm font-bold bg-zinc-800/50 w-6 h-6 flex items-center justify-center rounded-full"
+              >
+                ✕
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       {/* Navbar */}
       <nav className="sticky top-0 z-50 glass-panel !rounded-none !border-x-0 !border-t-0 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
