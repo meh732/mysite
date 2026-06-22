@@ -480,14 +480,20 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
       if (pendingOrders.length === 0) {
         await reply("✅ هیچ سفارش در انتظار بررسی وجود ندارد.", adminKeyboard);
       } else {
-        await reply(`📦 تعداد ${pendingOrders.length} سفارش در انتظار بررسی است.\n(برای مدیریت به پنل وب مراجعه فرمایید، قابلیت تعاملی کامل به زودی اضافه می‌شود.)`, adminKeyboard);
+        const keyboard = pendingOrders.slice(0, 5).map(o => [
+            { text: `📦 #${o.id} - ${o.productTitle}`, callback_data: `admin_order_${o.id}` }
+        ]);
+        await reply(`📦 تعداد ${pendingOrders.length} سفارش در انتظار بررسی است.\nبرای مدیریت روی سفارش کلیک کنید:`, { inline_keyboard: keyboard });
       }
       return;
     }
 
     if (text === "🛍️ مدیریت محصولات") {
-      await reply(`🛍️ لیست محصولات فعال:\n${products.map(p => `- ${p.title} (${p.active !== false ? '✅ فعال' : '❌ غیرفعال'})`).join('\n')}\n\n(برای تغییر وضعیت یا ویرایش به پنل وب مراجعه نمایید.)`, adminKeyboard);
-      return;
+        const keyboard = products.map(p => [
+            { text: `${p.active !== false ? '✅' : '❌'} ${p.title}`, callback_data: `admin_prod_${p.id}` }
+        ]);
+        await reply(`🛍️ لیست محصولات:\nبرای تغییر وضعیت، روی محصول کلیک کنید:`, { inline_keyboard: keyboard });
+        return;
     }
 
     // Admin general support command / interactive guide
@@ -851,9 +857,51 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
     await reply(`لطفاً مبلغ مورد نظر خود را به تومان وارد کنید:`);
     return;
   }
+  if (text.startsWith('admin_order_')) {
+    const orderId = parseInt(text.split('_')[2], 10);
+    const order = orders.find(o => o.id === orderId);
+    if (!order) { await reply("سفارش یافت نشد."); return; }
+    
+    await reply(`📦 سفارش شماره #${order.id}\nمحصول: ${order.productTitle}\nکاربر: ${order.userIdentifier}\nوضعیت: ${order.status}\nتوضیحات: ${order.additionalDetails || 'ندارد'}`, {
+        inline_keyboard: [
+            [{ text: '✅ تایید', callback_data: `approve_order_${orderId}` }, { text: '❌ رد', callback_data: `reject_order_${orderId}` }]
+        ]
+    });
+    return;
+  }
+
+  if (text.startsWith('approve_order_')) {
+    const orderId = parseInt(text.split('_')[2], 10);
+    const order = orders.find(o => o.id === orderId);
+    if (order) { order.status = 'approved'; saveDatabase(); await reply(`✅ سفارش #${orderId} تایید شد.`); }
+    return;
+  }
+  
+  if (text.startsWith('reject_order_')) {
+    const orderId = parseInt(text.split('_')[2], 10);
+    const order = orders.find(o => o.id === orderId);
+    if (order) { order.status = 'rejected'; saveDatabase(); await reply(`❌ سفارش #${orderId} رد شد.`); }
+    return;
+  }
+
+  if (text.startsWith('admin_prod_')) {
+    const prodId = parseInt(text.split('_')[2], 10);
+    const prod = products.find(p => p.id === prodId);
+    if (!prod) { await reply("محصول یافت نشد."); return; }
+    
+    prod.active = prod.active === false ? true : false;
+    saveDatabase();
+    await reply(`✅ وضعیت محصول "${prod.title}" به ${prod.active ? 'فعال' : 'غیرفعال'} تغییر یافت.`);
+    return;
+  }
   
   // Check: Topup action from inline keyboard (Callback queries for finalize)
   if (text.startsWith('topuponline_')) {
+    if (!settings.onlinePaymentUrl || settings.onlinePaymentUrl.trim() === '') {
+      await reply("❌ درگاه پرداخت آنلاین در حال حاضر غیرفعال می‌باشد.\nلطفاً از روش پرداخت کارت به کارت استفاده نمایید.");
+      return;
+    }
+
     const amount = parseInt(text.split('_')[1], 10);
     const userObj = users.find(u => u.phone === userMap.phone);
     if (userObj) {
@@ -872,8 +920,8 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
       saveDatabase();
       
       await reply(
-        `✅ پرداخت آنلاین از طریق درگاه با موفقیت انجام شد و مبلغ ${amount.toLocaleString('fa-IR')} تومان به کیف پول شما اضافه شد.\n` +
-        `اکنون میتوانید خرید خود را مجددا از بخش فروشگاه ثبت کنید.`,
+        `✅ پرداخت آنلاین با موفقیت تأیید شد و مبلغ ${amount.toLocaleString('fa-IR')} تومان به کیف پول شما اضافه گردید.\n` +
+        `اکنون می‌توانید خرید خود را ثبت کنید.`,
         getUserKeyboard(isAdmin)
       );
     }
