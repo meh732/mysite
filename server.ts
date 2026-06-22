@@ -889,14 +889,77 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
         return;
       }
 
-      userCheckoutStates[chat.id] = { productId: prod.id };
+      const priceStrRaw = prod.price.replace(/[^0-9]/g, '');
+      const priceInt = Number(priceStrRaw) || 0;
+      const priceStr = `${priceInt.toLocaleString('fa-IR')} تومان`;
+      
+      const userObj = users.find(u => u.phone === userMap.phone);
+      const balance = userObj?.walletBalance || 0;
+      
+      if (balance < priceInt) {
+        await reply(
+          `❌ **اعتبار کیف پول شما برای این خرید کافی نیست!** ❌\n\n` +
+          `📦 فاکتور انتخابی: **${prod.title}**\n` +
+          `💰 مبلغ مورد نیاز: **${priceStr}**\n` +
+          `💳 موجودی فعلی: **${balance.toLocaleString('fa-IR')} تومان**\n\n` +
+          `💡 **جهت خرید، لطفاً ابتدا کیف پول خود را شارژ کنید:**\n\n` +
+          `لینک مستقیم افزایش اعتبار:\n` +
+          `${settings.onlinePaymentUrl || 'آدرسی تعریف نشده است'}`
+        );
+        return;
+      }
+
+      // Sufficient funds: deduct and register order
+      if (userObj) {
+        userObj.walletBalance = balance - priceInt;
+      }
+
+      const newTrans = {
+        id: 3000 + transactions.length + 1,
+        userIdentifier: userMap.phone,
+        amount: priceInt,
+        description: `خرید ربات: محصول ${prod.title}`,
+        type: 'debit',
+        createdAt: new Date().toISOString()
+      };
+      transactions.push(newTrans);
+
+      const newOrder = {
+        id: 1000 + orders.length + 1,
+        productId: prod.id,
+        productTitle: prod.title,
+        productType: prod.type,
+        userIdentifier: userMap.phone,
+        price: priceStr,
+        status: 'pending' as const,
+        createdAt: new Date().toISOString(),
+        additionalDetails: `خرید بدون پکیج انتخابی`
+      };
+      orders.push(newOrder);
+      saveDatabase();
+
+      // Ask for details AFTER purchase
+      userCheckoutStates[chat.id] = { orderId: newOrder.id };
+      
       await reply(
-        `🛒 **شما درخواست خرید "${prod.title}" را دارید**\n\n` +
-        `💰 مبلغ: *${prod.price}*\n\n` +
-        `📝 لطفاً مشخصات یا اطلاعات تماس تکمیلی خود را در پیام بعدی بفرستید.\n` +
-        `پس از ارسال پیام بعدی، فاکتور شما نهایی گشته و کد سفارش دریافت خواهید کرد.\n\n` +
-        `❌ جهت انصراف کلمه **لغو** را بنویسید.`
+        `🎉 **خرید شما با موفقیت تکمیل شد!**\n\n` +
+        `✅ مبلغ **${priceStr}** از کیف پول دیجیتال کسر شد.\n` +
+        `💳 مانده حساب جدید شما: **${userObj?.walletBalance.toLocaleString('fa-IR')} تومان**\n` +
+        `🆔 فاکتور پیگیری: #${newOrder.id}\n\n` +
+        `📝 **آیا توضیحات یا آدرس ایمیلی برای دریافت اکانت در ارتباط با این سفارش دارید؟**\n` +
+        `لطفاً در پیام بعدی اطلاعات تکمیلی را بفرستید.`,
+        getUserKeyboard(isAdmin)
       );
+
+      // Notify administrator via bot using separate chat IDs
+      const adminMsg = `🟢 **سفارش جدید ربات!**\n\n📦 محصول: ${prod.title}\n👤 کاربر (تلفن): ${userMap.phone}\n💰 مبلغ: ${priceStr}`;
+      
+      if (settings.adminTelegramChatId && settings.telegramToken) {
+        botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', { chat_id: settings.adminTelegramChatId, text: adminMsg });
+      }
+      if (settings.adminBaleChatId && settings.baleToken) {
+        botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', { chat_id: settings.adminBaleChatId, text: adminMsg });
+      }
       return;
     }
   }
