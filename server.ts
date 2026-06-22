@@ -789,8 +789,8 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
         const userObj = users.find(u => u.phone === userMap.phone);
         const balance = userObj?.walletBalance || 0;
         
-        const priceInt = Number(selectedVar.price);
-        const priceStr = `${selectedVar.price.toLocaleString('fa-IR')} تومان`;
+        const priceInt = parsePrice(selectedVar.price);
+        const priceStr = `${priceInt.toLocaleString('fa-IR')} تومان`;
         
         if (balance < priceInt) {
           await reply(
@@ -889,8 +889,7 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
         return;
       }
 
-      const priceStrRaw = prod.price.replace(/[^0-9]/g, '');
-      const priceInt = Number(priceStrRaw) || 0;
+      const priceInt = parsePrice(prod.price);
       const priceStr = `${priceInt.toLocaleString('fa-IR')} تومان`;
       
       const userObj = users.find(u => u.phone === userMap.phone);
