@@ -540,16 +540,14 @@ export async function handleBotUpdate(platform: 'telegram' | 'bale', update: any
 
         if (state.pendingTopupType === 'online') {
             await reply(
-                `💳 **شارژ آنلاین**\n\n` +
-                `مبلغ: ${amount.toLocaleString('fa-IR')} تومان\n` +
-                `جهت انجام پرداخت، به درگاه بانکی زیر مراجعه کنید:\n` +
-                `${settings.onlinePaymentUrl || 'آدرس پرداخت تعریف نشده'}\n\n` +
-                `پس از پرداخت موفقیت‌آمیز، در صورت تنظیم درگاه، حساب شما اتومات شارژ می‌شود.`
+                `💳 **درخواست شارژ آنلاین حساب**\n\n` +
+                `💰 مبلغ درخواستی: **${amount.toLocaleString('fa-IR')} تومان**\n\n` +
+                `🔗 جهت تکمیل فرآیند پرداخت و شارژ آنی حساب، لطفا روی لینک زیر کلیک کرده و عملیات را در درگاه بانکی به پایان برسانید:\n\n` +
+                `${settings.onlinePaymentUrl || '⚠️ لینک پرداخت در تنظیمات تعریف نشده است.'}\n\n` +
+                `پس از پرداخت موفق، موجودی شما به‌صورت خودکار در سیستم بروزرسانی خواهد شد.`,
+                getUserKeyboard(isAdmin)
             );
-            const simulationButtons = [
-                [{ text: `✅ [شبیه‌ساز] پرداخت موفق`, callback_data: `topuponline_${amount}` }]
-            ];
-            await reply("یا برای شبیه‌سازی تایید پرداخت:", { inline_keyboard: simulationButtons });
+            delete userCheckoutStates[chat.id];
         } else {
             await reply(
                 `🏦 **شارژ کارت به کارت**\n\n` +
@@ -589,15 +587,6 @@ export async function handleBotUpdate(platform: 'telegram' | 'bale', update: any
   }
 
   // --- Callback Handlers for Topup and Purchases ---
-  if (text.startsWith('topuponline_')) {
-      const amount = parseInt(text.split('_')[1], 10);
-      await reply(`💳 پرداخت آنلاین مبلغ ${amount.toLocaleString('fa-IR')} تومان شبیه‌سازی شد (در دیتابیس لوکال).`);
-      const user = users.find(u => u.phone === userMap.phone);
-      if (user) { user.walletBalance = (user.walletBalance || 0) + amount; saveDatabase(); }
-      await reply(`✅ کیف پول شما شارژ شد. موجودی جدید: ${(user?.walletBalance || 0).toLocaleString('fa-IR')} تومان`);
-      return;
-  }
-
   if (text.startsWith('approve_trans_')) {
     const transId = parseInt(text.split('_')[2], 10);
     const trans = transactions.find(t => t.id === transId);
