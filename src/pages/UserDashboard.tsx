@@ -192,48 +192,24 @@ export default function UserDashboard() {
       return;
     }
 
-    if (topupMethod === 'online') {
-      fetch('/api/wallet/topup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userIdentifier,
-          amount: amt,
-          cardHolderName: cardHolder || 'آنلاین شتاب'
-        })
+    fetch('/api/wallet/topup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userIdentifier,
+        amount: amt,
+        cardHolderName: cardHolder || 'آنلاین شتاب'
       })
-        .then(res => res.json())
-        .then(data => {
-          if (data.success) {
-            setWalletSuccessMsg(`اعتبار موجودی حساب شما با موفقیت مبلغ ${amt.toLocaleString('fa-IR')} تومان از طریق درگاه آنلاین افزایش یافت.`);
-            setProfile(prev => ({ ...prev, walletBalance: data.walletBalance }));
-            setTransactions(prev => [data.transaction, ...prev]);
-            setCardHolder('');
-          }
-        });
-    } else {
-      fetch('/api/wallet/request-topup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userIdentifier,
-          amount: amt,
-          cardHolderName: cardHolder,
-          receiptImage: receiptImage || 'simulated_web_receipt_' + Date.now()
-        })
-      })
-        .then(res => res.json())
-        .then(data => {
-          if (data.success) {
-            setWalletSuccessMsg(`رسید پرداخت کارت به کارت شما با موفقیت ثبت شد و فاکتور #${data.transaction.id} ایجاد گردید. پس از تایید فیش توسط ادمین، کیف پول شما شارژ می‌شود.`);
-            setTransactions(prev => [data.transaction, ...prev]);
-            setCardHolder('');
-            setReceiptImage('');
-          } else {
-            alert(data.message || 'خطا در ثبت درخواست شارژ.');
-          }
-        });
-    }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setWalletSuccessMsg(`اعتبار موجودی حساب شما با موفقیت مبلغ ${amt.toLocaleString('fa-IR')} تومان از طریق درگاه آنلاین افزایش یافت.`);
+          setProfile(prev => ({ ...prev, walletBalance: data.walletBalance }));
+          setTransactions(prev => [data.transaction, ...prev]);
+          setCardHolder('');
+        }
+      });
   };
 
   const handleCreateTicket = (e: React.FormEvent) => {
@@ -434,7 +410,11 @@ export default function UserDashboard() {
               <ArrowRight className="w-6 h-6 rotate-180" />
             </button>
             <div className="flex flex-col">
-              <span className="font-bold text-lg sm:text-xl text-white">پنل کاربری دیجیتال استور</span>
+              {adminSettings?.siteLogoUrl ? (
+                <img src={adminSettings.siteLogoUrl} alt="Logo" className="h-8 object-contain mb-1" />
+              ) : (
+                <span className="font-bold text-lg sm:text-xl text-white">پنل کاربری دیجیتال استور</span>
+              )}
               <span className="text-[10px] text-zinc-400 hidden sm:block">خرید هوشمندانه سرویس‌ها و پشتیبانی تیکت کارگزار</span>
             </div>
           </div>
@@ -784,70 +764,18 @@ export default function UserDashboard() {
                 {/* Wallet Balance Top-up */}
                 <div className="md:col-span-2 glass-panel p-5.5 border border-zinc-900/60 flex flex-col justify-between">
                   <div>
-                    {/* Method Selector Tabs */}
-                    <div className="flex border-b border-zinc-900 mb-4 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => { setTopupMethod('online'); setWalletSuccessMsg(''); }}
-                        className={`pb-2 text-xs font-bold px-3 transition-colors border-b-2 cursor-pointer ${topupMethod === 'online' ? 'border-b-2 border-indigo-550 text-indigo-400 font-bold' : 'border-transparent text-zinc-400 hover:text-zinc-200'}`}
-                      >
-                        💳 درگاه آنلاین بانکی شتاب
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { setTopupMethod('card'); setWalletSuccessMsg(''); }}
-                        className={`pb-2 text-xs font-bold px-3 transition-colors border-b-2 cursor-pointer ${topupMethod === 'card' ? 'border-b-2 border-indigo-550 text-indigo-400 font-bold' : 'border-transparent text-zinc-400 hover:text-zinc-200'}`}
-                      >
-                        🏦 کارت به کارت دستی (تایید فیش)
-                      </button>
-                    </div>
-
                     <form onSubmit={handleTopupSubmit} className="space-y-4">
-                      {topupMethod === 'online' ? (
-                        <div className="space-y-3">
-                          <span className="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
-                            <CreditCard className="w-4 h-4 text-indigo-400" />
-                            افزایش اعتبار آنی و خودکار از درگاه مستقیم
-                          </span>
-                          {adminSettings?.onlinePaymentUrl ? (
-                            <p className="text-[11px] text-zinc-500 leading-relaxed bg-zinc-950/40 p-2.5 rounded-lg border border-zinc-900">
-                              درگاه فعال مدیر: <a href={adminSettings.onlinePaymentUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-400 underline font-mono">{adminSettings.onlinePaymentUrl}</a>. عملیات به صورت شبیه‌سازی شده حساب شما را آنی شارژ می‌کند.
-                            </p>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <div className="bg-zinc-950/60 border border-zinc-900/80 p-4 rounded-xl space-y-3">
-                          <span className="text-xs font-bold text-indigo-450 text-indigo-400 flex items-center gap-1.5">
-                            <Coins className="w-4 h-4" />
-                            اطلاعات حساب بانکی فروشگاه (کارت به کارت)
-                          </span>
-                          <div className="grid gap-2 text-xs text-zinc-350">
-                            {adminSettings?.cardNo ? (
-                              <div className="bg-zinc-950 p-2 rounded-lg flex items-center justify-between border border-zinc-850">
-                                <span>شماره کارت بانک:</span>
-                                <span className="font-mono text-indigo-300 font-bold select-all">{adminSettings.cardNo}</span>
-                              </div>
-                            ) : (
-                              <p className="text-zinc-500 italic text-center text-xs">شماره کارت هنوز توسط مدیر ثبت نشده است.</p>
-                            )}
-                            {adminSettings?.cardHolder && (
-                              <div className="bg-zinc-950 p-2 rounded-lg flex items-center justify-between border border-zinc-850">
-                                <span>نام صاحب حساب:</span>
-                                <span className="font-bold">{adminSettings.cardHolder}</span>
-                              </div>
-                            )}
-                            {adminSettings?.cardBank && (
-                              <div className="bg-zinc-950 p-2 rounded-lg flex items-center justify-between border border-zinc-850">
-                                <span>نام بانک عامل:</span>
-                                <span>{adminSettings.cardBank}</span>
-                              </div>
-                            )}
-                          </div>
-                          <div className="pt-2 border-t border-zinc-900 space-y-2 text-zinc-400 text-xs text-justify">
-                            پس از واریز مبلغ به شماره کارت بالا، دکمه ثبت درخواست را بزنید تا ادمین پس از تایید موجودی، حساب شما را شارژ نماید.
-                          </div>
-                        </div>
-                      )}
+                      <div className="space-y-3">
+                        <span className="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
+                          <CreditCard className="w-4 h-4 text-indigo-400" />
+                          افزایش اعتبار آنی و خودکار از درگاه مستقیم
+                        </span>
+                        {adminSettings?.onlinePaymentUrl ? (
+                          <p className="text-[11px] text-zinc-500 leading-relaxed bg-zinc-950/40 p-2.5 rounded-lg border border-zinc-900">
+                            درگاه فعال مدیر: <a href={adminSettings.onlinePaymentUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-400 underline font-mono">{adminSettings.onlinePaymentUrl}</a>. عملیات به صورت شبیه‌سازی شده حساب شما را آنی شارژ می‌کند.
+                          </p>
+                        ) : null}
+                      </div>
 
                       <div className="grid gap-4 sm:grid-cols-2">
                         <div>

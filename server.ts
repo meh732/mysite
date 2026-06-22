@@ -313,9 +313,8 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
   // Answer callback queries to resolve client loading spinner
   if (isCallback && callbackQueryId) {
     try {
-      botRequest(apiHost, token, 'answerCallbackQuery', {
-        callback_query_id: callbackQueryId,
-        text: 'در حال پردازش...'
+      await botRequest(apiHost, token, 'answerCallbackQuery', {
+        callback_query_id: callbackQueryId
       }).catch(err => console.error('Error answering callback:', err));
     } catch (e) {
       // Ignored
@@ -627,13 +626,19 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
   const photo = message.photo || (message.document && message.document.mime_type?.startsWith('image/') ? [message.document] : null);
   if (photo && photo.length > 0) {
     const fileId = message.photo ? photo[photo.length - 1].file_id : message.document.file_id;
+    let reqAmount = 0;
+    if (userCheckoutStates[chat.id] && userCheckoutStates[chat.id].pendingTopupAmount) {
+      reqAmount = userCheckoutStates[chat.id].pendingTopupAmount;
+      delete userCheckoutStates[chat.id].pendingTopupAmount;
+    }
+
     const newTrans = {
       id: 3000 + transactions.length + 1,
       userIdentifier: userMap.phone,
-      amount: 0,
+      amount: reqAmount,
       description: `رسید کارت به کارت ارسالی از بات ${platformName}`,
-      type: 'credit',
-      status: 'pending',
+      type: 'credit' as const,
+      status: 'pending' as const,
       receiptImage: `file_id_${fileId}`,
       createdAt: new Date().toISOString()
     };
@@ -648,12 +653,32 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
       getUserKeyboard(isAdmin)
     );
     
-    const adminMsg = `📸 **رسید بانکی تصویری جدید از بات ${platformName}!**\n\n👤 فرستنده (تلفن): ${userMap.phone}\n🆔 شناسه تراکنش: #${newTrans.id}\n\nجهت بررسی تراکنش به پنل ادمین مراجعه نمایید.`;
+    const adminMsg = `📸 **رسید بانکی تصویری جدید از بات ${platformName}!**\n\n👤 فرستنده (تلفن): ${userMap.phone}\n💰 مبلغ درخواستی: ${reqAmount > 0 ? reqAmount.toLocaleString('fa-IR') + ' تومان' : 'نامشخص'}\n🆔 شناسه تراکنش: #${newTrans.id}\n\nجهت بررسی و تایید/رد تراکنش به پنل ادمین مراجعه نمایید.`;
+    
+    // Admin Inline Keyboard
+    const adminInlineKeyboard = [
+      [
+        { text: '✅ تایید', callback_data: `approve_trans_${newTrans.id}` },
+        { text: '❌ رد', callback_data: `reject_trans_${newTrans.id}` }
+      ]
+    ];
+
     if (settings.adminTelegramChatId && settings.telegramToken) {
-      botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', { chat_id: settings.adminTelegramChatId, text: adminMsg });
+      botRequest('https://api.telegram.org', settings.telegramToken, 'sendPhoto', { 
+        chat_id: settings.adminTelegramChatId, 
+        photo: fileId,
+        caption: adminMsg,
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: adminInlineKeyboard } 
+      });
     }
     if (settings.adminBaleChatId && settings.baleToken) {
-      botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', { chat_id: settings.adminBaleChatId, text: adminMsg });
+      botRequest('https://tapi.bale.ai', settings.baleToken, 'sendPhoto', { 
+        chat_id: settings.adminBaleChatId, 
+        photo: fileId, 
+        caption: adminMsg,
+        reply_markup: { inline_keyboard: adminInlineKeyboard }
+      });
     }
     return;
   }
@@ -751,7 +776,7 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
   }
 
   // Check 5: Active Details Collection Sequence
-  if (userCheckoutStates[chat.id]) {
+  if (userCheckoutStates[chat.id] && userCheckoutStates[chat.id].orderId) {
     const orderId = userCheckoutStates[chat.id].orderId;
     
     if (text === 'لغو' || text === 'انصراف' || text === 'منصرف شدم') {
@@ -775,6 +800,104 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
     return;
   }
 
+  // Check: Topup action from inline keyboard
+  if (text.startsWith('topuponline_')) {
+    const amount = parseInt(text.split('_')[1], 10);
+    const userObj = users.find(u => u.phone === userMap.phone);
+    if (userObj) {
+      userObj.walletBalance = (userObj.walletBalance || 0) + amount;
+      
+      const newTrans = {
+        id: 3000 + transactions.length + 1,
+        userIdentifier: userMap.phone,
+        amount: amount,
+        description: `افزایش اعتبار آنلاین (شبیه‌ساز درگاه)`,
+        type: 'credit' as const,
+        status: 'approved' as const,
+        createdAt: new Date().toISOString()
+      };
+      transactions.push(newTrans);
+      saveDatabase();
+      
+      await reply(
+        `✅ پرداخت آنلاین از طریق درگاه با موفقیت انجام شد و مبلغ ${amount.toLocaleString('fa-IR')} تومان به کیف پول شما اضافه شد.\n` +
+        `اکنون میتوانید خرید خود را مجددا از بخش فروشگاه ثبت کنید.`,
+        getUserKeyboard(isAdmin)
+      );
+    }
+    return;
+  }
+
+  if (text.startsWith('topupcard_')) {
+    const amount = parseInt(text.split('_')[1], 10);
+    userCheckoutStates[chat.id] = { pendingTopupAmount: amount };
+    await reply(
+      `🏦 **درخواست شارژ حساب از طریق کارت به کارت**\n\n` +
+      `لطفاً مبلغ **${amount.toLocaleString('fa-IR')} تومان** را به شماره کارت زیر واریز نمایید:\n\n` +
+      `💳 شماره کارت: \`${settings.cardNo || 'مشخص نشده'}\`\n` +
+      `👤 بنام: **${settings.cardHolder || 'مشخص نشده'}**\n` +
+      `🏦 بانک: *${settings.cardBank || 'مشخص نشده'}*\n\n` +
+      `ثبت موقت درخواست شارژ انجام شد. لطفاً **تصویر رسید بانکی** خود را همینجا ارسال (آپلود) کنید.`
+    );
+    return;
+  }
+
+  if (text.startsWith('approve_trans_')) {
+    const transId = parseInt(text.split('_')[2], 10);
+    const trans = transactions.find(t => t.id === transId);
+    if (!trans) {
+       await reply('❌ تراکنش یافت نشد.');
+       return;
+    }
+    if (trans.status !== 'pending') {
+       await reply('⚠️ این تراکنش قبلاً تعیین وضعیت شده است.');
+       return;
+    }
+    
+    trans.status = 'approved';
+    const user = users.find(u => u.phone === trans.userIdentifier);
+    if (user) {
+      user.walletBalance = (user.walletBalance || 0) + trans.amount;
+    }
+    saveDatabase();
+    
+    await reply(`✅ تراکنش #${trans.id} تایید شد و مبلغ ${trans.amount} به کیف پول کاربر اضافه گردید.`);
+    
+    const botUser = botUsers.find(b => b.phone === trans.userIdentifier);
+    if (botUser) {
+      const userMsg = `✅ **تایید افزایش اعتبار!**\n\nمبلغ **${trans.amount.toLocaleString('fa-IR')} تومان** با موفقیت توسط مدیریت تایید و به کیف پول شما واریز شد.\n\n💳 موجودی جدید شما: **${user?.walletBalance.toLocaleString('fa-IR')} تومان**`;
+      if (botUser.telegramChatId) botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', { chat_id: botUser.telegramChatId, text: userMsg });
+      if (botUser.baleChatId) botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', { chat_id: botUser.baleChatId, text: userMsg });
+    }
+    return;
+  }
+  
+  if (text.startsWith('reject_trans_')) {
+    const transId = parseInt(text.split('_')[2], 10);
+    const trans = transactions.find(t => t.id === transId);
+    if (!trans) {
+       await reply('❌ تراکنش یافت نشد.');
+       return;
+    }
+    if (trans.status !== 'pending') {
+       await reply('⚠️ این تراکنش قبلاً تعیین وضعیت شده است.');
+       return;
+    }
+    
+    trans.status = 'rejected';
+    saveDatabase();
+    
+    await reply(`❌ تراکنش #${trans.id} رد شد.`);
+    
+    const botUser = botUsers.find(b => b.phone === trans.userIdentifier);
+    if (botUser) {
+      const userMsg = `❌ **رد درخواست افزایش اعتبار**\n\nدرخواست شارژ حساب شما به مبلغ **${trans.amount.toLocaleString('fa-IR')} تومان** توسط مدیریت رد شد. در صورت هرگونه سوال با پشتیبانی در ارتباط باشید.`;
+      if (botUser.telegramChatId) botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', { chat_id: botUser.telegramChatId, text: userMsg });
+      if (botUser.baleChatId) botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', { chat_id: botUser.baleChatId, text: userMsg });
+    }
+    return;
+  }
+
   // Check 5.5: Explicit Variations callback query selection
   if (text.startsWith('buyvar_')) {
     const parts = text.split('_');
@@ -793,14 +916,19 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
         const priceStr = `${priceInt.toLocaleString('fa-IR')} تومان`;
         
         if (balance < priceInt) {
+          const missingAmount = priceInt - balance;
+          const topupInlineKeyboard = [
+            [{ text: `💳 شارژ آنلاین (${missingAmount.toLocaleString('fa-IR')})`, callback_data: `topuponline_${missingAmount}` }],
+            [{ text: `🏦 رویت اطلاعات کارت به کارت`, callback_data: `topupcard_${missingAmount}` }]
+          ];
           await reply(
-            `❌ **اعتبار کیف پول شما برای این خرید کافی نیست!** ❌\n\n` +
+            `❌ **موجودی کیف پول برای این خرید کافی نیست!** ❌\n\n` +
             `📦 فاکتور انتخابی: **${prod.title} (پکیج ${selectedVar.duration})**\n` +
-            `💰 مبلغ مورد نیاز: **${priceStr}**\n` +
-            `💳 موجودی فعلی: **${balance.toLocaleString('fa-IR')} تومان**\n\n` +
-            `💡 **جهت خرید، لطفاً ابتدا کیف پول خود را شارژ کنید:**\n\n` +
-            `لینک مستقیم افزایش اعتبار:\n` +
-            `${settings.onlinePaymentUrl || 'آدرسی تعریف نشده است'}`
+            `💰 مبلغ فاکتور: **${priceStr}**\n` +
+            `💳 موجودی فعلی: **${balance.toLocaleString('fa-IR')} تومان**\n` +
+            `🔹 **میزان کسری مجودی: ${missingAmount.toLocaleString('fa-IR')} تومان**\n\n` +
+            `💡 لطفاً از طریق یکی از دکمه‌های زیر، موجودی خود را تأمین کنید:`,
+            { inline_keyboard: topupInlineKeyboard }
           );
           return;
         }
@@ -896,14 +1024,19 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
       const balance = userObj?.walletBalance || 0;
       
       if (balance < priceInt) {
+        const missingAmount = priceInt - balance;
+        const topupInlineKeyboard = [
+          [{ text: `💳 شارژ آنلاین (${missingAmount.toLocaleString('fa-IR')})`, callback_data: `topuponline_${missingAmount}` }],
+          [{ text: `🏦 رویت اطلاعات کارت به کارت`, callback_data: `topupcard_${missingAmount}` }]
+        ];
         await reply(
-          `❌ **اعتبار کیف پول شما برای این خرید کافی نیست!** ❌\n\n` +
+          `❌ **موجودی کیف پول برای این خرید کافی نیست!** ❌\n\n` +
           `📦 فاکتور انتخابی: **${prod.title}**\n` +
-          `💰 مبلغ مورد نیاز: **${priceStr}**\n` +
-          `💳 موجودی فعلی: **${balance.toLocaleString('fa-IR')} تومان**\n\n` +
-          `💡 **جهت خرید، لطفاً ابتدا کیف پول خود را شارژ کنید:**\n\n` +
-          `لینک مستقیم افزایش اعتبار:\n` +
-          `${settings.onlinePaymentUrl || 'آدرسی تعریف نشده است'}`
+          `💰 مبلغ فاکتور: **${priceStr}**\n` +
+          `💳 موجودی فعلی: **${balance.toLocaleString('fa-IR')} تومان**\n` +
+          `🔹 **میزان کسری مجودی: ${missingAmount.toLocaleString('fa-IR')} تومان**\n\n` +
+          `💡 لطفاً از طریق یکی از دکمه‌های زیر، موجودی خود را تأمین کنید:`,
+          { inline_keyboard: topupInlineKeyboard }
         );
         return;
       }
