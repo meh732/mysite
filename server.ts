@@ -496,12 +496,52 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
         return;
     }
 
+    // --- Admin Callback Handlers ---
+    if (text.startsWith('admin_order_') || text.startsWith('approve_order_') || text.startsWith('reject_order_') || text.startsWith('admin_prod_')) {
+      if (text.startsWith('admin_order_')) {
+          const orderId = parseInt(text.split('_')[2], 10);
+          const order = orders.find(o => o.id === orderId);
+          if (!order) { await reply("سفارش یافت نشد."); return; }
+          
+          await reply(`📦 سفارش شماره #${order.id}\nمحصول: ${order.productTitle}\nکاربر: ${order.userIdentifier}\nوضعیت: ${order.status}\nتوضیحات: ${order.additionalDetails || 'ندارد'}`, {
+              inline_keyboard: [
+                  [{ text: '✅ تایید', callback_data: `approve_order_${orderId}` }, { text: '❌ رد', callback_data: `reject_order_${orderId}` }]
+              ]
+          });
+          return;
+      }
+      if (text.startsWith('approve_order_')) {
+          const orderId = parseInt(text.split('_')[2], 10);
+          const order = orders.find(o => o.id === orderId);
+          if (order) { order.status = 'approved'; saveDatabase(); await reply(`✅ سفارش #${orderId} تایید شد.`); }
+          return;
+      }
+      if (text.startsWith('reject_order_')) {
+          const orderId = parseInt(text.split('_')[2], 10);
+          const order = orders.find(o => o.id === orderId);
+          if (order) { order.status = 'rejected'; saveDatabase(); await reply(`❌ سفارش #${orderId} رد شد.`); }
+          return;
+      }
+      if (text.startsWith('admin_prod_')) {
+          const prodId = parseInt(text.split('_')[2], 10);
+          const prod = products.find(p => p.id === prodId);
+          if (!prod) { await reply("محصول یافت نشد."); return; }
+          
+          prod.active = prod.active === false ? true : false;
+          saveDatabase();
+          await reply(`✅ وضعیت محصول "${prod.title}" به ${prod.active ? 'فعال' : 'غیرفعال'} تغییر یافت.`);
+          return;
+      }
+      return;
+    }
+
     // Admin general support command / interactive guide
     await reply(
       `مدیر گرامی، دستور "${text}" شناسایی نشد.\n\nلطفاً از دکمه‌های ناوبری زیر سیستم استفاده کنید:`,
       adminKeyboard
     );
     return;
+} // admin mode ends
   }
 
   // --- REGULAR USER / CUSTOMER FLOWS WITH ACTIVE STORE MENU ---
@@ -855,43 +895,6 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
     const type = text === 'start_topup_online' ? 'online' : 'card';
     userCheckoutStates[chat.id] = { pendingTopupType: type };
     await reply(`لطفاً مبلغ مورد نظر خود را به تومان وارد کنید:`);
-    return;
-  }
-  if (text.startsWith('admin_order_')) {
-    const orderId = parseInt(text.split('_')[2], 10);
-    const order = orders.find(o => o.id === orderId);
-    if (!order) { await reply("سفارش یافت نشد."); return; }
-    
-    await reply(`📦 سفارش شماره #${order.id}\nمحصول: ${order.productTitle}\nکاربر: ${order.userIdentifier}\nوضعیت: ${order.status}\nتوضیحات: ${order.additionalDetails || 'ندارد'}`, {
-        inline_keyboard: [
-            [{ text: '✅ تایید', callback_data: `approve_order_${orderId}` }, { text: '❌ رد', callback_data: `reject_order_${orderId}` }]
-        ]
-    });
-    return;
-  }
-
-  if (text.startsWith('approve_order_')) {
-    const orderId = parseInt(text.split('_')[2], 10);
-    const order = orders.find(o => o.id === orderId);
-    if (order) { order.status = 'approved'; saveDatabase(); await reply(`✅ سفارش #${orderId} تایید شد.`); }
-    return;
-  }
-  
-  if (text.startsWith('reject_order_')) {
-    const orderId = parseInt(text.split('_')[2], 10);
-    const order = orders.find(o => o.id === orderId);
-    if (order) { order.status = 'rejected'; saveDatabase(); await reply(`❌ سفارش #${orderId} رد شد.`); }
-    return;
-  }
-
-  if (text.startsWith('admin_prod_')) {
-    const prodId = parseInt(text.split('_')[2], 10);
-    const prod = products.find(p => p.id === prodId);
-    if (!prod) { await reply("محصول یافت نشد."); return; }
-    
-    prod.active = prod.active === false ? true : false;
-    saveDatabase();
-    await reply(`✅ وضعیت محصول "${prod.title}" به ${prod.active ? 'فعال' : 'غیرفعال'} تغییر یافت.`);
     return;
   }
   
