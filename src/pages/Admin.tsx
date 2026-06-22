@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   LayoutDashboard, Users, ShoppingBag, Settings, Bot, Shield, LogOut, 
   Activity, Database, MessageSquare, Plus, Trash2, Edit2, CheckCircle, 
-  X, ToggleLeft, ToggleRight, Loader2, Eye, EyeOff, AlertCircle, ShoppingCart, RefreshCw, Sparkles, Folder, GitMerge, FileText
+  X, ToggleLeft, ToggleRight, Loader2, Eye, EyeOff, AlertCircle, ShoppingCart, RefreshCw, Sparkles, Folder, GitMerge, FileText,
+  Coins, CreditCard, Menu
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Product, Order, Group, SubGroup, ProductVariation } from '../types';
@@ -11,6 +12,7 @@ import { Product, Order, Group, SubGroup, ProductVariation } from '../types';
 export default function Admin() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isLogged, setIsLogged] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const navigate = useNavigate();
 
   // Settings & DB State
@@ -38,7 +40,11 @@ export default function Admin() {
     contactPhone: '',
     contactEmail: '',
     contactAddress: '',
-    heroVideoUrl: ''
+    heroVideoUrl: '',
+    onlinePaymentUrl: '',
+    cardNo: '',
+    cardHolder: '',
+    cardBank: ''
   });
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -528,7 +534,75 @@ export default function Admin() {
 
   return (
     <div className="min-h-screen flex text-zinc-100 selection:bg-indigo-500/30 bg-zinc-950">
-      {/* Sidebar */}
+      {/* Mobile Floating Sidebar Overlay */}
+      <AnimatePresence>
+        {isMobileSidebarOpen && (
+          <div className="fixed inset-0 z-50 flex md:hidden" dir="rtl">
+            {/* Backdrop */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileSidebarOpen(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            {/* Drawer */}
+            <motion.div 
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="relative w-72 max-w-[80vw] bg-zinc-900 border-l border-zinc-805 h-full flex flex-col p-6 shadow-2xl"
+            >
+              <div className="flex items-center justify-between pb-6 border-b border-zinc-800 mb-6 font-sans">
+                <div className="flex items-center gap-3 text-lg font-bold">
+                  <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center">
+                    <Shield className="w-4 h-4 text-white" />
+                  </div>
+                  <span className="text-white">پنل مدیریت</span>
+                </div>
+                <button 
+                  onClick={() => setIsMobileSidebarOpen(false)}
+                  className="p-1.5 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <nav className="flex-1 space-y-1">
+                {tabs.map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => {
+                      setActiveTab(tab.id);
+                      setIsMobileSidebarOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-3 px-4 py-3 text-sm rounded-xl transition-all cursor-pointer ${
+                      activeTab === tab.id 
+                        ? 'bg-indigo-500 text-white font-semibold shadow-lg shadow-indigo-500/10' 
+                        : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200'
+                    }`}
+                  >
+                    <div className={activeTab === tab.id ? 'text-white' : 'text-zinc-400'}>
+                      {tab.icon}
+                    </div>
+                    <span>{tab.label}</span>
+                  </button>
+                ))}
+              </nav>
+
+              <div className="pt-4 border-t border-zinc-850">
+                <button onClick={() => {setIsLogged(false); navigate('/')}} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-400 rounded-xl hover:bg-red-500/10 transition-colors cursor-pointer">
+                  <LogOut className="w-5 h-5" />
+                  <span>خروج از پنل</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Sidebar for Desktop */}
       <aside className="w-64 border-l border-zinc-800 bg-zinc-900/40 backdrop-blur flex flex-col hidden md:flex">
         <div className="p-6 border-b border-zinc-850">
           <div className="flex items-center gap-3 text-xl font-bold">
@@ -567,12 +641,32 @@ export default function Admin() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 p-8 overflow-y-auto">
-        {isLoading && (
-          <div className="fixed top-4 left-4 z-50 bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 px-3 py-1.5 rounded-xl flex items-center gap-2 text-xs">
-            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Load ...
+      <main className="flex-1 overflow-y-auto">
+        {/* Mobile top bar toggle */}
+        <div className="flex md:hidden items-center justify-between border-b border-zinc-900 bg-zinc-950/95 px-4 py-4 sticky top-0 z-40 backdrop-blur">
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setIsMobileSidebarOpen(true)}
+              className="p-2 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 rounded-xl text-zinc-300 transition-colors cursor-pointer shadow-md"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <span className="font-bold text-sm text-white drop-shadow-md">پنل مدیریت هوشمند</span>
           </div>
-        )}
+          <button 
+            onClick={() => {setIsLogged(false); navigate('/')}}
+            className="text-xs bg-red-500/10 hover:bg-red-500 hover:text-white text-red-500 px-3 py-1.5 rounded-lg transition-colors cursor-pointer font-bold"
+          >
+            خروج
+          </button>
+        </div>
+
+        <div className="p-4 md:p-8">
+          {isLoading && (
+            <div className="fixed top-4 left-4 z-50 bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 px-3 py-1.5 rounded-xl flex items-center gap-2 text-xs font-bold">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Load ...
+            </div>
+          )}
 
         {activeTab === 'dashboard' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 max-w-6xl mx-auto">
@@ -1199,6 +1293,57 @@ export default function Admin() {
                 </div>
              </div>
 
+             <div className="glass-panel p-6 border border-zinc-805/40 bg-zinc-900/30 rounded-2xl">
+                <h3 className="font-bold text-lg mb-4 text-white flex items-center gap-2">
+                  <Coins className="w-5 h-5 text-indigo-400" />
+                  تنظیمات درگاه پرداخت و کارت به کارت
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-zinc-300 block mb-2">لینک مستقیم درگاه خرید آنلاین (مانند زرین‌پال)</label>
+                    <input 
+                      type="text" 
+                      value={adminSettings.onlinePaymentUrl || ''} 
+                      onChange={e => setAdminSettings({...adminSettings, onlinePaymentUrl: e.target.value})} 
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-white outline-none focus:border-indigo-500 font-mono text-xs" 
+                      dir="ltr" 
+                      placeholder="https://zarinpal.com/your_store" 
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-zinc-300 block mb-2">شماره کارت بانکی (کارت به کارت)</label>
+                    <input 
+                      type="text" 
+                      value={adminSettings.cardNo || ''} 
+                      onChange={e => setAdminSettings({...adminSettings, cardNo: e.target.value})} 
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-white outline-none focus:border-indigo-500 font-mono text-xs" 
+                      dir="ltr" 
+                      placeholder="60379918..." 
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-zinc-300 block mb-2">نام صاحب کارت/حساب</label>
+                    <input 
+                      type="text" 
+                      value={adminSettings.cardHolder || ''} 
+                      onChange={e => setAdminSettings({...adminSettings, cardHolder: e.target.value})} 
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-white outline-none focus:border-indigo-500 text-sm" 
+                      placeholder="مثلا: محمد علوی" 
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-zinc-300 block mb-2">نام بانک صادرکننده</label>
+                    <input 
+                      type="text" 
+                      value={adminSettings.cardBank || ''} 
+                      onChange={e => setAdminSettings({...adminSettings, cardBank: e.target.value})} 
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-white outline-none focus:border-indigo-500 text-sm" 
+                      placeholder="مثلا: بانک ملی ایران" 
+                    />
+                  </div>
+                </div>
+             </div>
+
              <div className="glass-panel p-6 border border-zinc-805/40 bg-zinc-900/30">
                 <h3 className="font-bold text-lg mb-4 text-white">تنظیمات ایمیل (جهت ارسال کد یکبار مصرف)</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1331,6 +1476,20 @@ export default function Admin() {
                      />
                      <p className="text-[10px] text-zinc-500 mt-1">
                        یک لینک مستقیم به فایل ویدیویی MP4 وارد کنید تا در بخش هیرو (بالای سایت) به صورت بک‌گراند زنده و سینماتیک لوپ شود.
+                     </p>
+                   </div>
+                   <div>
+                     <label className="text-sm font-medium text-zinc-300 block mb-2">لینک عکس لوگوی سایت</label>
+                     <input 
+                       type="text" 
+                       value={adminSettings.siteLogoUrl || ''} 
+                       onChange={e => setAdminSettings({...adminSettings, siteLogoUrl: e.target.value})} 
+                       className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-white outline-none focus:border-indigo-500 font-mono text-sm shadow-inner" 
+                       dir="ltr" 
+                       placeholder="e.g. https://example.com/logo.png" 
+                     />
+                     <p className="text-[10px] text-zinc-500 mt-1">
+                       لینک یک عکس دلخواه وارد کنید تا بجای کلمه متنی DStore نمایش داده شود.
                      </p>
                    </div>
                  </div>
@@ -1525,6 +1684,7 @@ export default function Admin() {
              </div>
            </motion.div>
         )}
+        </div>
       </main>
 
       {/* --- Product CRUD Modal form (افزودن و ویرایش محصولات) --- */}

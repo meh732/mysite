@@ -493,10 +493,14 @@ export default function Home() {
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/')}>
-              <div className="w-10 h-10 bg-indigo-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
-                <Store className="text-white w-5 h-5" />
-              </div>
-              <span className="font-bold text-xl tracking-tight hidden sm:block">دیجیتال استور</span>
+              {siteConfig?.siteLogoUrl ? (
+                <img src={siteConfig.siteLogoUrl} alt="Logo" className="h-10 object-contain" />
+              ) : (
+                <div className="w-10 h-10 bg-indigo-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                  <Store className="text-white w-5 h-5" />
+                </div>
+              )}
+              {!siteConfig?.siteLogoUrl && <span className="font-bold text-xl tracking-tight hidden sm:block">دیجیتال استور</span>}
             </div>
 
             {/* Products Interactive Dropdown & Details */}
@@ -977,58 +981,63 @@ export default function Home() {
 
       <main className="max-w-7xl mx-auto px-6 py-12">
         {/* Cinematic Hero Video Header Banner */}
-        {siteConfig.heroVideoUrl && (
-          <div className="relative mb-12 overflow-hidden rounded-[32px] border border-zinc-200/50 dark:border-zinc-800/60 bg-zinc-950/40 h-[340px] md:h-[420px] flex items-center justify-center text-center p-8 shadow-2xl">
-            {/* Background Video */}
-            <video 
-              autoPlay 
-              loop 
-              muted 
-              playsInline 
-              className="absolute inset-0 w-full h-full object-cover opacity-35 pointer-events-none"
-            >
-              <source src={siteConfig.heroVideoUrl} type="video/mp4" />
-            </video>
-            
-            {/* Subtle Gradient Overlay */}
-            <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/50 to-indigo-950/25 pointer-events-none" />
-            <div className="absolute inset-0 bg-radial from-indigo-500/10 via-transparent to-transparent pointer-events-none" />
-
-            {/* Dynamic Slogan Text Content */}
-            <div className="relative z-10 max-w-2xl mx-auto space-y-6">
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-indigo-400 text-xs font-bold uppercase tracking-wider animate-pulse">
-                <Sparkles className="w-4 h-4 text-indigo-400 animate-spin-slow" />
-                <span>بروزرسانی زنده و هوشمند</span>
-              </div>
-              <h1 className="text-3xl md:text-5xl font-black text-white leading-tight tracking-tight drop-shadow-md">
-                فناوری نوین، <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-indigo-300">در دستان شما</span>
-              </h1>
-              <p className="text-zinc-300 text-xs md:text-sm max-w-lg mx-auto leading-relaxed drop-shadow">
-                باکیفیت‌ترین لایسنس‌ها، اشتراک‌های ویژه، و خدمات برنامه‌نویسی و بات‌های هوشمند را در محیطی مدرن به صورت آنی دریافت کنید.
-              </p>
+        {(() => {
+          const fallbackVideoUrl = "https://assets.mixkit.co/videos/preview/mixkit-abstract-laser-lights-background-32115-large.mp4";
+          const currentVideoUrl = siteConfig.heroVideoUrl || fallbackVideoUrl;
+          return (
+            <div className="relative mb-12 overflow-hidden rounded-[32px] border border-zinc-200/50 dark:border-zinc-800/60 bg-zinc-950/40 h-[340px] md:h-[420px] flex items-center justify-center text-center p-8 shadow-2xl">
+              {/* Background Video */}
+              <video 
+                key={currentVideoUrl}
+                autoPlay 
+                loop 
+                muted 
+                playsInline 
+                className="absolute inset-0 w-full h-full object-cover opacity-35 pointer-events-none"
+              >
+                <source src={currentVideoUrl} type="video/mp4" />
+              </video>
               
-              <div className="flex items-center justify-center gap-4 pt-2">
-                <a 
-                  href="#products" 
-                  className="bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-xs md:text-sm px-6 py-3 rounded-full transition-all shadow-lg shadow-indigo-500/20 cursor-pointer"
-                >
-                  مشاهده دسته‌بندی‌ها
-                </a>
-                {siteConfig.contactPhone && (
+              {/* Subtle Gradient Overlay */}
+              <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/50 to-indigo-950/25 pointer-events-none" />
+              <div className="absolute inset-0 bg-radial from-indigo-500/10 via-transparent to-transparent pointer-events-none" />
+
+              {/* Dynamic Slogan Text Content */}
+              <div className="relative z-10 max-w-2xl mx-auto space-y-6">
+                <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-indigo-400 text-xs font-bold uppercase tracking-wider animate-pulse">
+                  <Sparkles className="w-4 h-4 text-indigo-400 animate-spin-slow" />
+                  <span>بروزرسانی زنده و هوشمند</span>
+                </div>
+                <h1 className="text-3xl md:text-5xl font-black text-white leading-tight tracking-tight drop-shadow-md">
+                  فناوری نوین، <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-indigo-300">در دستان شما</span>
+                </h1>
+                <p className="text-zinc-300 text-xs md:text-sm max-w-lg mx-auto leading-relaxed drop-shadow">
+                  باکیفیت‌ترین لایسنس‌ها، اشتراک‌های ویژه، و خدمات برنامه‌نویسی و بات‌های هوشمند را در محیطی مدرن به صورت آنی دریافت کنید.
+                </p>
+                
+                <div className="flex items-center justify-center gap-4 pt-2">
                   <a 
-                    href={`tel:${siteConfig.contactPhone}`} 
-                    className="bg-zinc-900/30 hover:bg-zinc-900/60 text-zinc-300 border border-zinc-800 font-bold text-xs md:text-sm px-6 py-3 rounded-full transition-all cursor-pointer backdrop-blur-md"
+                    href="#products" 
+                    className="bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-xs md:text-sm px-6 py-3 rounded-full transition-all shadow-lg shadow-indigo-500/20 cursor-pointer"
                   >
-                    ارتباط با پشتیبانی
+                    مشاهده دسته‌بندی‌ها
                   </a>
-                )}
+                  {siteConfig.contactPhone && (
+                    <a 
+                      href={`tel:${siteConfig.contactPhone}`} 
+                      className="bg-zinc-900/30 hover:bg-zinc-900/60 text-zinc-300 border border-zinc-800 font-bold text-xs md:text-sm px-6 py-3 rounded-full transition-all cursor-pointer backdrop-blur-md"
+                    >
+                      ارتباط با پشتیبانی
+                    </a>
+                  )}
+                </div>
               </div>
+              
+              {/* Decorative bottom fade line */}
+              <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-zinc-950 to-transparent pointer-events-none" />
             </div>
-            
-            {/* Decorative bottom fade line */}
-            <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-zinc-950 to-transparent pointer-events-none" />
-          </div>
-        )}
+          );
+        })()}
 
         {/* --- Modern Dynamic Slideshow & Bento Tiles Section --- */}
         {products.filter(p => p.active !== false).length > 0 && (

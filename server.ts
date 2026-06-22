@@ -101,7 +101,8 @@ let settings = {
   onlinePaymentUrl: 'https://zarinpal.com/digital_store',
   cardNo: '6037991823456789',
   cardHolder: 'محمدحسین علوی',
-  cardBank: 'بانک ملی ایران'
+  cardBank: 'بانک ملی ایران',
+  siteLogoUrl: ''
 };
 let botUsers: Array<{
   phone: string;
@@ -151,6 +152,9 @@ const otps: Record<string, string> = {};
 // Helper: Make requests to Telegram or Bale API
 async function botRequest(apiHost: string, token: string, method: string, body?: any) {
   try {
+    if (body && method === 'sendMessage' && !body.parse_mode) {
+      body.parse_mode = 'Markdown';
+    }
     const response = await fetch(`${apiHost}/bot${token}/${method}`, {
       method: body ? 'POST' : 'GET',
       headers: body ? { 'Content-Type': 'application/json' } : undefined,
@@ -746,118 +750,29 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
     return;
   }
 
-  // Check 5: Active Checkout Sequence Confirmation (if already selected a product/variation)
+  // Check 5: Active Details Collection Sequence
   if (userCheckoutStates[chat.id]) {
-    const checkoutStateObj = userCheckoutStates[chat.id];
+    const orderId = userCheckoutStates[chat.id].orderId;
     
     if (text === 'لغو' || text === 'انصراف' || text === 'منصرف شدم') {
       delete userCheckoutStates[chat.id];
-      await reply("❌ روند معامله آنلاین لغو شد. به منوی اصلی بازگشتیم.", getUserKeyboard(isAdmin));
+      await reply("❌ ثبت جزئیات متوقف شد. فاکتور شما ثبت شده است و بدون توضیحات باقی ماند. به منوی اصلی بازگشتیم.", getUserKeyboard(isAdmin));
       return;
     }
 
-    const prod = products.find(p => p.id === checkoutStateObj.productId && p.active !== false);
-    if (prod) {
-      let selectedVar: any = null;
-      if (checkoutStateObj.variationId && prod.variations) {
-        selectedVar = prod.variations.find((v: any) => String(v.id) === String(checkoutStateObj.variationId));
-      }
-
-      const priceInt = selectedVar ? Number(selectedVar.price) : parsePrice(prod.price);
-      const priceStr = selectedVar ? `${selectedVar.price.toLocaleString('fa-IR')} تومان` : prod.price;
-
-      // Find user wallet record to check balance
-      let userObj = users.find(u => u.phone === userMap.phone);
-      if (!userObj) {
-        // Safe automatic register/link if profile is missing
-        userObj = { id: Date.now(), name: 'کاربر همگام شده', phone: userMap.phone, walletBalance: 0, createdAt: new Date().toISOString() };
-        users.push(userObj);
-      }
-
-      const balance = userObj.walletBalance || 0;
-
-      if (balance < priceInt) {
-        // Send Insufficient Funds warning aligned with user specs
-        await reply(
-          `❌ **اعتبار کیف پول شما برای این خرید کافی نیست!** ❌\n\n` +
-          `📦 فاکتور انتخابی: **${prod.title} ${selectedVar ? `(پکیج ${selectedVar.duration})` : ''}**\n` +
-          `💰 مبلغ مورد نیاز: **${priceStr}**\n` +
-          `💳 موجودی فعلی فوت شما: **${balance.toLocaleString('fa-IR')} تومان**\n\n` +
-          `------------------------------------\n` +
-          `💡 **جهت فعال‌سازی، لطفاً ابتدا حساب خود را شارژ کنید:**\n\n` +
-          `۱. **لینک مستقیم درگاه آنلاین (آنی)**:\n` +
-          `${settings.onlinePaymentUrl || 'فعلاً آدرسی تعریف نشده است'}\n\n` +
-          `۲. **کارت به کارت دستی (بانکی)**:\n` +
-          `💳 شماره کارت ۱۶ رقمی:\n` +
-          `\`${settings.cardNo || 'مشخص نشده'}\`\n` +
-          `🏦 بانک صادرکننده: *${settings.cardBank || 'مشخص نشده'}*\n` +
-          `👤 به نام: **${settings.cardHolder || 'مشخص نشده'}**\n\n` +
-          `📥 پس از انتقال وجه، تصویر رسید را آپلود کنید یا دستور زیر را ارسال کنید:\n` +
-          `«رسید [مبلغ به تومان] [نام واریز کننده]»\n\n` +
-          `📌 سفارش موقت شما تا واریز شارژ متوقف شد.`,
-          getUserKeyboard(isAdmin)
-        );
-        delete userCheckoutStates[chat.id];
-        return;
-      }
-
-      // Sufficient funds: deduct and register order
-      userObj.walletBalance = balance - priceInt;
-      
-      const orderDesc = selectedVar 
-        ? `${selectedVar.duration} (${selectedVar.provider} - ${selectedVar.type})`
-        : 'ساده';
-
-      const logDesc = selectedVar 
-        ? `خرید پکیج ${selectedVar.duration} محصول ${prod.title}`
-        : `خرید محصول ${prod.title}`;
-
-      const newTrans = {
-        id: 3000 + transactions.length + 1,
-        userIdentifier: userMap.phone,
-        amount: priceInt,
-        description: `پرداخت فاکتور سفارش از طریق ربات: ${logDesc}`,
-        type: 'debit',
-        createdAt: new Date().toISOString()
-      };
-      transactions.push(newTrans);
-
-      const newOrder = {
-        id: 1000 + orders.length + 1,
-        productId: prod.id,
-        productTitle: prod.title,
-        productType: prod.type,
-        userIdentifier: userMap.phone,
-        price: priceStr,
-        status: 'pending' as const,
-        createdAt: new Date().toISOString(),
-        additionalDetails: `پکیج: ${orderDesc} | توضیحات خریدار: ${text}`
-      };
-      orders.push(newOrder);
+    const orderIndex = orders.findIndex(o => o.id === orderId);
+    if (orderIndex !== -1) {
+      orders[orderIndex].additionalDetails = (orders[orderIndex].additionalDetails || '') + ` | توضیحات خریدار: ${text}`;
       saveDatabase();
-      delete userCheckoutStates[chat.id];
-
-      await reply(
-        `🎉 **خرید شما با موفقیت تکمیل شد!**\n\n` +
-        `✅ هزینه خرید به مبلغ **${priceStr}** از کیف پول دیجیتال کسر شد.\n` +
-        `💳 مانده حساب جدید شما: **${userObj.walletBalance.toLocaleString('fa-IR')} تومان**\n\n` +
-        `🆔 شماره فاکتور پیگیری: #${newOrder.id}\n` +
-        `📦 محصول: **${prod.title}**\n` +
-        `⏳ سفارش شما برای تحویل اکانت توسط کارشناسان در صف قرار گرفت و به محض فعال‌سازی، جزئیات همین‌جا برای شما ارسال خواهد شد.`,
-        getUserKeyboard(isAdmin)
-      );
-
-      // Notify administrator via bot using separate chat IDs
-      const adminMsg = `🟢 **سفارش جدید پرداخت شده با کیف پول!**\n\n📦 محصول: ${prod.title}\n👥 پکیج: ${orderDesc}\n👤 خریدار (تلفن): ${userMap.phone}\n💰 مبلغ: ${priceStr}\n📝 توضیحات سفارش: ${text}\n\nجهت واگذاری اکانت به پنل ادمین رجوع کنید.`;
-      
-      if (settings.adminTelegramChatId && settings.telegramToken) {
-        botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', { chat_id: settings.adminTelegramChatId, text: adminMsg });
-      }
-      if (settings.adminBaleChatId && settings.baleToken) {
-        botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', { chat_id: settings.adminBaleChatId, text: adminMsg });
-      }
-      return;
     }
+    delete userCheckoutStates[chat.id];
+    
+    await reply(
+      `✅ **توضیحات شما برای سفارش #${orderId} با موفقیت ثبت شد.**\n\n` +
+      `سفارش شما در اسرع وقت انجام خواهد شد. ممنون از اعتماد شما!`,
+      getUserKeyboard(isAdmin)
+    );
+    return;
   }
 
   // Check 5.5: Explicit Variations callback query selection
@@ -870,19 +785,78 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
     if (prod && prod.variations) {
       const selectedVar = prod.variations.find((v: any) => String(v.id) === String(varId));
       if (selectedVar) {
-        userCheckoutStates[chat.id] = { productId: prod.id, variationId: selectedVar.id };
         
         const userObj = users.find(u => u.phone === userMap.phone);
         const balance = userObj?.walletBalance || 0;
         
+        const priceInt = Number(selectedVar.price);
+        const priceStr = `${selectedVar.price.toLocaleString('fa-IR')} تومان`;
+        
+        if (balance < priceInt) {
+          await reply(
+            `❌ **اعتبار کیف پول شما برای این خرید کافی نیست!** ❌\n\n` +
+            `📦 فاکتور انتخابی: **${prod.title} (پکیج ${selectedVar.duration})**\n` +
+            `💰 مبلغ مورد نیاز: **${priceStr}**\n` +
+            `💳 موجودی فعلی: **${balance.toLocaleString('fa-IR')} تومان**\n\n` +
+            `💡 **جهت خرید، لطفاً ابتدا کیف پول خود را شارژ کنید:**\n\n` +
+            `لینک مستقیم افزایش اعتبار:\n` +
+            `${settings.onlinePaymentUrl || 'آدرسی تعریف نشده است'}`
+          );
+          return;
+        }
+
+        // Deduct and register order
+        if (userObj) {
+            userObj.walletBalance = balance - priceInt;
+        }
+        
+        const orderDesc = `${selectedVar.duration} (${selectedVar.provider} - ${selectedVar.type})`;
+
+        const newTrans = {
+          id: 3000 + transactions.length + 1,
+          userIdentifier: userMap.phone,
+          amount: priceInt,
+          description: `خرید ربات: پکیج ${selectedVar.duration} محصول ${prod.title}`,
+          type: 'debit',
+          createdAt: new Date().toISOString()
+        };
+        transactions.push(newTrans);
+
+        const newOrder = {
+          id: 1000 + orders.length + 1,
+          productId: prod.id,
+          productTitle: prod.title,
+          productType: prod.type,
+          userIdentifier: userMap.phone,
+          price: priceStr,
+          status: 'pending' as const,
+          createdAt: new Date().toISOString(),
+          additionalDetails: `پکیج: ${orderDesc}`
+        };
+        orders.push(newOrder);
+        saveDatabase();
+
+        // Ask for details AFTER purchase
+        userCheckoutStates[chat.id] = { orderId: newOrder.id };
+        
         await reply(
-          `🛒 **شما پکیج «${selectedVar.duration}» محصول "${prod.title}" را انتخاب کردید.**\n\n` +
-          `💰 مبلغ فاکتور: **${selectedVar.price.toLocaleString('fa-IR')} تومان**\n` +
-          `💳 موجودی فعلی شبیه‌ساز شما: **${balance.toLocaleString('fa-IR')} تومان**\n\n` +
-          `📝 لطفاً مشخصات تکمیلی خود را برای بقیه ثبت بفرستید (مانند آدرس ایمیل ساخت اکانت).\n` +
-          `جهت نهایی‌سازی معامله خود، پیام بفرستید.\n\n` +
-          `❌ جهت انصراف کلمه **لغو** را بنویسید.`
+          `🎉 **خرید شما با موفقیت تکمیل شد!**\n\n` +
+          `✅ مبلغ **${priceStr}** از کیف پول دیجیتال کسر شد.\n` +
+          `💳 مانده حساب جدید شما: **${userObj?.walletBalance.toLocaleString('fa-IR')} تومان**\n` +
+          `🆔 فاکتور پیگیری: #${newOrder.id}\n\n` +
+          `📝 **آیا توضیحات یا آدرس ایمیلی برای ثبت اکانت دارید؟**\n` +
+          `لطفاً در قالب یک پیام برای ما ارسال کنید تا روی سفارش شما ثبت شود. (یا برای رد کردن کلمه لغو را بفرستید)`,
+          getUserKeyboard(isAdmin)
         );
+
+        // Notify administrator
+        const adminMsg = `🟢 **سفارش جدید ربات!**\n\n📦 ${prod.title}\n👥 ${orderDesc}\n👤 کاربر: ${userMap.phone}\n💰 ${priceStr}`;
+        if (settings.adminTelegramChatId && settings.telegramToken) {
+          botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', { chat_id: settings.adminTelegramChatId, text: adminMsg });
+        }
+        if (settings.adminBaleChatId && settings.baleToken) {
+          botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', { chat_id: settings.adminBaleChatId, text: adminMsg });
+        }
         return;
       }
     }
@@ -975,7 +949,8 @@ async function startServer() {
       contactPhone: settings.contactPhone,
       contactEmail: settings.contactEmail,
       contactAddress: settings.contactAddress,
-      heroVideoUrl: settings.heroVideoUrl
+      heroVideoUrl: settings.heroVideoUrl,
+      siteLogoUrl: settings.siteLogoUrl
     });
   });
 

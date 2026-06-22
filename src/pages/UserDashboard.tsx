@@ -58,6 +58,8 @@ export default function UserDashboard() {
   // Interactive Purchase Drawer/Dialog state
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [purchaseDetails, setPurchaseDetails] = useState('');
+  const [lastOrder, setLastOrder] = useState<any>(null);
+  const [isSubmittingDetails, setIsSubmittingDetails] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'wallet' | 'manual'>('wallet');
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [purchaseError, setPurchaseError] = useState('');
@@ -144,7 +146,7 @@ export default function UserDashboard() {
     fetch('/api/products')
       .then(res => res.json())
       .then(data => {
-        setProducts(data);
+        setProducts(data.filter((p: any) => p.active !== false));
       });
   };
 
@@ -301,8 +303,8 @@ export default function UserDashboard() {
       body: JSON.stringify({
         productId: selectedProduct.id,
         userIdentifier,
-        additionalDetails: purchaseDetails,
-        paymentMethod: paymentMethod
+        additionalDetails: '',
+        paymentMethod: 'wallet'
       })
     })
       .then(res => res.json())
@@ -311,9 +313,19 @@ export default function UserDashboard() {
           setPurchaseSuccess(true);
           loadOrders();
           loadProfileAndWallet();
-          setPurchaseDetails('');
+          // We can put the newly created order in state so the user can add details
+          if (data.order) {
+            setLastOrder(data.order);
+          }
         } else {
-          setPurchaseError(data.message || 'خطا در ثبت نهایی تراکنش.');
+          if (data.requireTopUp) {
+            setSelectedProduct(null);
+            setTimeout(() => {
+               setActiveTab('wallet');
+            }, 300);
+          } else {
+            setPurchaseError(data.message || 'خطا در ثبت نهایی تراکنش.');
+          }
         }
         setIsPurchasing(false);
       })
@@ -321,6 +333,26 @@ export default function UserDashboard() {
         setPurchaseError('خطای ناشناخته در ارتباط با درگاه سرور.');
         setIsPurchasing(false);
       });
+  };
+
+  const handleUpdateOrderDetails = () => {
+    if (!lastOrder) return;
+    setIsSubmittingDetails(true);
+    fetch(`/api/orders/${lastOrder.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ additionalDetails: purchaseDetails })
+    })
+      .then(res => res.json())
+      .then(data => {
+        setIsSubmittingDetails(false);
+        setPurchaseDetails('');
+        setLastOrder(null);
+        setSelectedProduct(null);
+        setActiveTab('orders');
+        loadOrders();
+      })
+      .catch(() => setIsSubmittingDetails(false));
   };
 
   const handleLogout = () => {
@@ -384,6 +416,7 @@ export default function UserDashboard() {
 
   // Filters for online catalog
   const filteredProducts = products.filter(p => {
+    if (p.active === false) return false;
     const matchesSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           p.desc.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = selectedCategory === 'all' || p.type === selectedCategory;
@@ -410,9 +443,9 @@ export default function UserDashboard() {
             {/* Quick theme switcher embedded cleanly */}
             <ThemeSwitcher />
 
-            <div className="flex items-center gap-2 bg-zinc-900/50 px-3 py-1.5 border border-zinc-850 rounded-full">
-              <User className="w-4 h-4 text-indigo-400" />
-              <span className="text-xs font-semibold tracking-wide text-zinc-200">{userName}</span>
+            <div className="flex items-center gap-2 bg-zinc-900/50 px-2 sm:px-3 py-1.5 border border-zinc-850 rounded-full max-w-[100px] sm:max-w-none">
+              <User className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
+              <span className="text-[10px] sm:text-xs font-semibold tracking-wide text-zinc-200 truncate">{userName}</span>
             </div>
 
             <button onClick={handleLogout} className="text-xs bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white px-3 sm:px-4 py-2 rounded-xl transition-all font-medium cursor-pointer">
@@ -693,6 +726,11 @@ export default function UserDashboard() {
                         
                         <button 
                           onClick={() => {
+                            if (!profile.name || profile.name === 'کاربر گرامی' || profile.name === 'کاربر جدید' || !profile.password) {
+                              alert('لطفاً پیش از ثبت سفارش حتماً نام کامل خود و یک رمز عبور جدید را در بخش تنظیمات پروفایل وارد کنید.');
+                              setActiveTab('settings');
+                              return;
+                            }
                             setSelectedProduct(prod);
                             setPurchaseSuccess(false);
                             setPurchaseError('');
@@ -805,15 +843,8 @@ export default function UserDashboard() {
                               </div>
                             )}
                           </div>
-                          <div className="pt-2 border-t border-zinc-900 space-y-2">
-                            <label className="block text-[10px] text-zinc-550 block mb-1">کد پیگیری، متن واریزی یا لینک رسید تصویری آپلود شده:</label>
-                            <input
-                              type="text"
-                              value={receiptImage}
-                              onChange={e => setReceiptImage(e.target.value)}
-                              placeholder="مثال: فیش شماره ۲۳۸۹۶ منطبق بر بانک ملی..."
-                              className="w-full bg-zinc-950 border border-zinc-850 rounded-xl px-3 py-2 text-xs outline-none focus:border-indigo-500 text-zinc-250 transition-colors"
-                            />
+                          <div className="pt-2 border-t border-zinc-900 space-y-2 text-zinc-400 text-xs text-justify">
+                            پس از واریز مبلغ به شماره کارت بالا، دکمه ثبت درخواست را بزنید تا ادمین پس از تایید موجودی، حساب شما را شارژ نماید.
                           </div>
                         </div>
                       )}
@@ -873,8 +904,8 @@ export default function UserDashboard() {
                 </h3>
 
                 {transactions.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-right border-collapse text-xs">
+                  <div className="overflow-x-auto w-full border border-zinc-900 rounded-xl">
+                    <table className="w-full min-w-[550px] text-right border-collapse text-xs">
                       <thead>
                         <tr className="border-b border-zinc-850 text-zinc-500">
                           <th className="pb-3 font-semibold">شناسه تراکنش</th>
@@ -1257,45 +1288,20 @@ export default function UserDashboard() {
                   </div>
 
                   <div className="space-y-3">
-                    <div>
-                      <label className="block text-[11px] text-zinc-500 mb-1.5 font-bold">توضیحات تکمیلی یا الزامات سفارش شما:</label>
-                      <textarea 
-                        rows={3} 
-                        value={purchaseDetails}
-                        onChange={(e) => setPurchaseDetails(e.target.value)}
-                        placeholder="مثلا: آدرس ایمیل انتخابی من برای دریافت لایسنس یا اکانت..."
-                        className="w-full bg-zinc-950 border border-zinc-850 rounded-xl px-3 py-2 text-xs outline-none focus:border-indigo-500 text-zinc-200 transition-colors"
-                      />
-                    </div>
-
                     <div className="space-y-2">
                       <span className="block text-[11px] text-zinc-500 font-bold">روش پرداخت هزینه سفارش:</span>
-                      <div className="grid grid-cols-2 gap-3 text-xs">
-                        <label className={`flex items-center gap-2 p-2.5 rounded-xl border cursor-pointer select-none transition-all ${paymentMethod === 'wallet' ? 'border-emerald-500 bg-emerald-500/5 text-emerald-400' : 'border-zinc-800 hover:bg-zinc-900/40 text-zinc-400'}`}>
+                      <div className="grid grid-cols-1 gap-3 text-xs">
+                        <label className="flex items-center gap-2 p-2.5 rounded-xl border border-emerald-500 bg-emerald-500/5 text-emerald-400 select-none">
                           <input 
                             type="radio" 
                             name="payMethod" 
-                            checked={paymentMethod === 'wallet'}
-                            onChange={() => setPaymentMethod('wallet')}
+                            checked={true}
+                            readOnly
                             className="accent-emerald-500"
                           />
                           <div className="flex flex-col">
-                            <span className="font-bold">کسر از کیف پول</span>
-                            <span className="text-[9px] opacity-70">موجودی: {profile.walletBalance?.toLocaleString('fa-IR')} تومان</span>
-                          </div>
-                        </label>
-
-                        <label className={`flex items-center gap-2 p-2.5 rounded-xl border cursor-pointer select-none transition-all ${paymentMethod === 'manual' ? 'border-indigo-500 bg-indigo-500/5 text-indigo-400' : 'border-zinc-800 hover:bg-zinc-900/40 text-zinc-400'}`}>
-                          <input 
-                            type="radio" 
-                            name="payMethod" 
-                            checked={paymentMethod === 'manual'}
-                            onChange={() => setPaymentMethod('manual')}
-                            className="accent-indigo-500"
-                          />
-                          <div className="flex flex-col">
-                            <span className="font-bold">واریز کارت به کارت</span>
-                            <span className="text-[9px] opacity-70">واریز و گواهی بانکی دستی</span>
+                            <span className="font-bold">خرید مستقیم از کیف پول</span>
+                            <span className="text-[9px] opacity-70">موجودی فعلی: {profile.walletBalance?.toLocaleString('fa-IR')} تومان</span>
                           </div>
                         </label>
                       </div>
@@ -1334,20 +1340,38 @@ export default function UserDashboard() {
                   <h3 className="text-lg font-extrabold text-white">تراکنش و خرید با موفقیت ثبت شد!</h3>
                   
                   <p className="text-zinc-400 text-xs sm:text-sm max-w-sm mx-auto leading-relaxed">
-                    {paymentMethod === 'wallet' 
-                      ? 'بهای سفارش با موفقیت از اعتبار کیف پول دیجیتال کسر گردید. سرویس شما بلافاصله فعال شد و از منوی "سرویس‌های من" و تیکت‌ها قابل مدیریت است.' 
-                      : 'درخواست سفارش با موفقیت ثبت گردید. پس از هماهنگی اطلاعات و مدارک واریز با ادمین، سرویس فعال خواهد شد.'}
+                    بهای سفارش با موفقیت از اعتبار کیف پول دیجیتال کسر گردید. در صورت نیاز می‌توانید جزئیات سفارش را از طریق فرم زیر تکمیل کنید.
                   </p>
 
-                  <div className="flex gap-3 pt-4">
+                  <div className="text-right space-y-2 mt-4 inline-block w-full max-w-sm">
+                    <label className="block text-[11px] text-zinc-400 font-bold">توضیحات تکمیلی یا الزامات سفارش شما (اختیاری):</label>
+                    <textarea 
+                      rows={3} 
+                      value={purchaseDetails}
+                      onChange={(e) => setPurchaseDetails(e.target.value)}
+                      placeholder="مثلا: آدرس ایمیل انتخابی من برای دریافت لایسنس یا اکانت..."
+                      className="w-full bg-zinc-950/50 border border-zinc-800 rounded-xl px-3 py-2 text-xs outline-none focus:border-indigo-500 text-zinc-200 transition-colors"
+                      dir="rtl"
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-4 justify-center">
                     <button 
                       onClick={() => {
                         setSelectedProduct(null);
-                        setActiveTab(paymentMethod === 'wallet' ? 'services' : 'orders');
+                        setActiveTab('services');
                       }}
-                      className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-2.5 text-xs font-bold transition-all cursor-pointer"
+                      className="w-1/3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl py-2.5 text-xs font-bold transition-all cursor-pointer"
                     >
-                      {paymentMethod === 'wallet' ? 'برو به بخش سرویس‌های من' : 'برو به فاکتورها'}
+                      بستن
+                    </button>
+                    <button 
+                      onClick={handleUpdateOrderDetails}
+                      disabled={isSubmittingDetails}
+                      className="w-2/3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-2.5 text-xs font-bold transition-all cursor-pointer shadow-lg flex items-center justify-center gap-2"
+                    >
+                      {isSubmittingDetails ? <Loader2 className="w-4 h-4 animate-spin" /> : <div/>} 
+                      ثبت توضیحات و پایان
                     </button>
                   </div>
                 </div>
