@@ -102,7 +102,9 @@ let settings = {
   cardNo: '6037991823456789',
   cardHolder: 'محمدحسین علوی',
   cardBank: 'بانک ملی ایران',
-  siteLogoUrl: ''
+  siteLogoUrl: '',
+  onlinePaymentEnabled: true,
+  cardPaymentEnabled: true
 };
 let botUsers: Array<{
   phone: string;
@@ -335,7 +337,8 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
     keyboard: [
       [{ text: "📊 وضعیت سیستم" }, { text: "💾 دانلود بکاپ کلی" }],
       [{ text: "📦 مدیریت سفارشات" }, { text: "🛍️ مدیریت محصولات" }],
-      [{ text: "🔐 فعال/غیرفعال‌سازی لاگین موبایل" }, { text: "👤 سوییچ به پنل کاربری" }]
+      [{ text: "🔐 فعال/غیرفعال‌سازی لاگین موبایل" }, { text: "👤 سوییچ به پنل کاربری" }],
+      [{ text: "💳 تغییر درگاه آنلاین" }, { text: "💳 تغییر کارت‌به‌کارت" }]
     ],
     resize_keyboard: true
   };
@@ -466,6 +469,19 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
       return;
     }
 
+    if (text === "💳 تغییر درگاه آنلاین") {
+      settings.onlinePaymentEnabled = !settings.onlinePaymentEnabled;
+      saveDatabase();
+      await reply(`✅ درگاه آنلاین: ${settings.onlinePaymentEnabled ? 'فعال' : 'غیرفعال'}`, adminKeyboard);
+      return;
+    }
+    if (text === "💳 تغییر کارت‌به‌کارت") {
+      settings.cardPaymentEnabled = !settings.cardPaymentEnabled;
+      saveDatabase();
+      await reply(`✅ کارت به کارت: ${settings.cardPaymentEnabled ? 'فعال' : 'غیرفعال'}`, adminKeyboard);
+      return;
+    }
+
     if (text === "👤 سوییچ به پنل کاربری") {
       adminModeOverride[chat.id] = 'user';
       await reply(
@@ -496,8 +512,8 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
         return;
     }
 
-    // --- Admin Callback Handlers ---
-    if (text.startsWith('admin_order_') || text.startsWith('approve_order_') || text.startsWith('reject_order_') || text.startsWith('admin_prod_')) {
+  // --- Admin Callback Handlers ---
+    if (text.startsWith('admin_order_') || text.startsWith('approve_order_') || text.startsWith('reject_order_') || text.startsWith('admin_prod_') || text.startsWith('admin_toggle_')) {
       if (text.startsWith('admin_order_')) {
           const orderId = parseInt(text.split('_')[2], 10);
           const order = orders.find(o => o.id === orderId);
@@ -530,6 +546,17 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
           prod.active = prod.active === false ? true : false;
           saveDatabase();
           await reply(`✅ وضعیت محصول "${prod.title}" به ${prod.active ? 'فعال' : 'غیرفعال'} تغییر یافت.`);
+          return;
+      }
+      if (text.startsWith('admin_toggle_')) {
+          if (text === 'admin_toggle_online') {
+              settings.onlinePaymentEnabled = !settings.onlinePaymentEnabled;
+              await reply(`✅ پرداخت آنلاین: ${settings.onlinePaymentEnabled ? 'فعال' : 'غیرفعال'}`);
+          } else if (text === 'admin_toggle_card') {
+              settings.cardPaymentEnabled = !settings.cardPaymentEnabled;
+              await reply(`✅ کارت به کارت: ${settings.cardPaymentEnabled ? 'فعال' : 'غیرفعال'}`);
+          }
+          saveDatabase();
           return;
       }
       return;
@@ -906,28 +933,15 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
     }
 
     const amount = parseInt(text.split('_')[1], 10);
-    const userObj = users.find(u => u.phone === userMap.phone);
-    if (userObj) {
-      userObj.walletBalance = (userObj.walletBalance || 0) + amount;
-      
-      const newTrans = {
-        id: 3000 + transactions.length + 1,
-        userIdentifier: userMap.phone,
-        amount: amount,
-        description: `افزایش اعتبار آنلاین (شبیه‌ساز درگاه)`,
-        type: 'credit' as const,
-        status: 'approved' as const,
-        createdAt: new Date().toISOString()
-      };
-      transactions.push(newTrans);
-      saveDatabase();
-      
-      await reply(
-        `✅ پرداخت آنلاین با موفقیت تأیید شد و مبلغ ${amount.toLocaleString('fa-IR')} تومان به کیف پول شما اضافه گردید.\n` +
-        `اکنون می‌توانید خرید خود را ثبت کنید.`,
+    // Instruction for user to pay externally
+    await reply(
+        `💳 **پرداخت آنلاین**\n\n` +
+        `مبلغ: ${amount.toLocaleString('fa-IR')} تومان\n` +
+        `جهت انجام پرداخت، به لینک درگاه زیر مراجعه کنید:\n` +
+        `${settings.onlinePaymentUrl}\n\n` +
+        `✅ پس از پرداخت، اگر درگاه شما به سایت وصل باشد، حساب شما به صورت خودکار شارژ خواهد شد.`,
         getUserKeyboard(isAdmin)
-      );
-    }
+    );
     return;
   }
 
@@ -1222,8 +1236,6 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
   if (settings.adminBaleChatId && settings.baleToken) {
     botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', { chat_id: settings.adminBaleChatId, text: adminSyncMsg });
   }
-}
-
 // Start active background loops
 pollTelegram();
 pollBale();
