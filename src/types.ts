@@ -13,6 +13,14 @@ export interface SubGroup {
   active: boolean;
 }
 
+export interface ProductVariation {
+  id: string;
+  duration: string;
+  type: string;
+  provider: string;
+  price: number;
+}
+
 export interface Product {
   id: number;
   type: 'account' | 'service';
@@ -26,6 +34,7 @@ export interface Product {
   specs?: string; // New field for customizable detailed features/specs
   groupId?: number;
   subGroupId?: number;
+  variations?: ProductVariation[];
 }
 
 export interface Order {

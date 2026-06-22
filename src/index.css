@@ -2,137 +2,166 @@
 
 @theme {
   --font-sans: "Vazirmatn", ui-sans-serif, system-ui, sans-serif;
+
+  --color-zinc-50: var(--zinc-50);
+  --color-zinc-100: var(--zinc-100);
+  --color-zinc-150: var(--zinc-150);
+  --color-zinc-200: var(--zinc-200);
+  --color-zinc-250: var(--zinc-250);
+  --color-zinc-300: var(--zinc-300);
+  --color-zinc-350: var(--zinc-350);
+  --color-zinc-400: var(--zinc-400);
+  --color-zinc-450: var(--zinc-450);
+  --color-zinc-500: var(--zinc-500);
+  --color-zinc-550: var(--zinc-550);
+  --color-zinc-600: var(--zinc-600);
+  --color-zinc-650: var(--zinc-650);
+  --color-zinc-700: var(--zinc-700);
+  --color-zinc-750: var(--zinc-750);
+  --color-zinc-800: var(--zinc-800);
+  --color-zinc-805: var(--zinc-805);
+  --color-zinc-850: var(--zinc-850);
+  --color-zinc-855: var(--zinc-855);
+  --color-zinc-900: var(--zinc-900);
+  --color-zinc-905: var(--zinc-905);
+  --color-zinc-950: var(--zinc-950);
 }
 
-@layer utilities {
-  .glass-panel {
-    @apply bg-zinc-900/50 backdrop-blur-md border border-zinc-800 rounded-2xl;
-  }
-}
+@variant dark (&:where(.dark, .dark *));
 
 /* Custom Variables for Seamless Theme Swappings */
 :root {
   --bg-main: #09090b;
-  --bg-card: rgba(24, 24, 27, 0.5);
+  --bg-card: rgba(24, 24, 27, 0.55);
   --bg-card-solid: #18181b;
   --border-color: rgba(39, 39, 42, 0.6);
   --text-primary: #f4f4f5;
   --text-secondary: #a1a1aa;
   --accent-color: #6366f1;
+
+  --zinc-50: #fafafa;
+  --zinc-100: #f4f4f5;
+  --zinc-150: #ececed;
+  --zinc-200: #e4e4e7;
+  --zinc-250: #dbdbdf;
+  --zinc-300: #d4d4d8;
+  --zinc-350: #bcbcbf;
+  --zinc-400: #a1a1aa;
+  --zinc-450: #8c8c93;
+  --zinc-500: #71717a;
+  --zinc-550: #62626a;
+  --zinc-600: #52525b;
+  --zinc-650: #424248;
+  --zinc-700: #3f3f46;
+  --zinc-750: #333336;
+  --zinc-800: #27272a;
+  --zinc-805: rgba(39, 39, 42, 0.4);
+  --zinc-850: #1c1c1f;
+  --zinc-855: #19191c;
+  --zinc-900: #18181b;
+  --zinc-905: #121214;
+  --zinc-950: #09090b;
 }
 
-/* Light Theme Variables and Class Overrides */
 html.light, body.light, .light {
   --bg-main: #f5f6fa !important;
-  --bg-card: rgba(255, 255, 255, 0.82) !important;
+  --bg-card: rgba(255, 255, 255, 0.85) !important;
   --bg-card-solid: #ffffff !important;
   --border-color: #e4e4e7 !important;
   --text-primary: #121214 !important;
   --text-secondary: #3f3f46 !important;
   --accent-color: #4f46e5 !important;
+
+  --zinc-50: #000000 !important;
+  --zinc-100: #09090b !important;
+  --zinc-150: #121214 !important;
+  --zinc-200: #18181b !important;
+  --zinc-250: #1c1c1f !important;
+  --zinc-300: #27272a !important;
+  --zinc-350: #2e2e33 !important;
+  --zinc-400: #3f3f46 !important;
+  --zinc-450: #52525b !important;
+  --zinc-500: #62626a !important;
+  --zinc-550: #71717a !important;
+  --zinc-600: #8c8c93 !important;
+  --zinc-650: #a1a1aa !important;
+  --zinc-700: #bcbcbf !important;
+  --zinc-750: #cacbcc !important;
+  --zinc-800: #d4d4d8 !important;
+  --zinc-805: rgba(228, 228, 231, 0.4) !important;
+  --zinc-850: #e4e4e7 !important;
+  --zinc-855: #e6e8ec !important;
+  --zinc-900: #ffffff !important;
+  --zinc-905: #edf0f5 !important;
+  --zinc-950: #f5f6fa !important;
 }
 
 /* Global Transition */
 body {
+  background-color: var(--bg-main) !important;
+  color: var(--text-primary) !important;
   transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }
 
-/* Adaptive overrides for structural classes when in light mode */
-.light body {
-  background-color: var(--bg-main) !important;
-  color: var(--text-primary) !important;
-}
-.light .bg-zinc-950, .light .bg-black {
-  background-color: var(--bg-main) !important;
-}
-.light .bg-zinc-900 {
-  background-color: var(--bg-card-solid) !important;
-}
-.light .bg-zinc-900\/30 {
-  background-color: rgba(255, 255, 255, 0.4) !important;
-}
-.light .bg-zinc-900\/50 {
-  background-color: rgba(255, 255, 255, 0.6) !important;
-}
-.light .bg-zinc-850 {
-  background-color: #f1f3f5 !important;
-}
-.light .glass-panel {
+/* UI Panel styles */
+.glass-panel {
   background-color: var(--bg-card) !important;
   border-color: var(--border-color) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05) !important;
 }
-.light .border-zinc-800 {
-  border-color: var(--border-color) !important;
-}
-.light .border-zinc-805\/40, .light .border-zinc-850 {
-  border-color: #e4e4e7 !important;
-}
-.light .text-white, .light .text-zinc-100 {
-  color: var(--text-primary) !important;
-}
-.light .text-zinc-200, .light .text-zinc-300, .light .text-zinc-350 {
-  color: var(--text-secondary) !important;
-}
-.light .text-zinc-400 {
-  color: #4b5563 !important; /* zinc-600 */
-}
-.light .text-zinc-500 {
-  color: #6b7280 !important; /* zinc-500 */
-}
-.light .bg-zinc-950\/20 {
-  background-color: rgba(0, 0, 0, 0.02) !important;
-}
-.light .bg-indigo-500\/10 {
-  background-color: rgba(79, 70, 229, 0.08) !important;
-  color: #4f46e5 !important;
-}
-.light .bg-emerald-500\/10 {
-  background-color: rgba(16, 185, 129, 0.08) !important;
-  color: #059669 !important;
-}
-.light .text-emerald-400 {
-  color: #0d9488 !important;
-}
-.light .text-indigo-400 {
-  color: #4f46e5 !important;
-}
-.light .text-zinc-300 {
-  color: #27272a !important;
-}
-.light input {
-  background-color: #ffffff !important;
-  color: #000000 !important;
-  border-color: #d4d4d8 !important;
-}
-.light input:focus {
-  border-color: #4f46e5 !important;
-}
-.light select {
-  background-color: #ffffff !important;
-  color: #000000 !important;
-  border-color: #d4d4d8 !important;
-}
+
+/* Input structures in Light Mode */
+.light input,
+.light select,
 .light textarea {
   background-color: #ffffff !important;
   color: #000000 !important;
   border-color: #d4d4d8 !important;
 }
-.light .bg-white {
-  background-color: #1a1a1e !important;
-  color: #ffffff !important;
-}
-.light .bg-white.text-black {
-  background-color: #4f46e5 !important;
-  color: #ffffff !important;
-}
-.light .bg-white.text-black:hover {
-  background-color: #4338ca !important;
-}
-.light .text-black {
-  color: #ffffff !important;
-}
-.light .hover\:bg-zinc-200:hover {
-  background-color: rgba(0, 0, 0, 0.05) !important;
+.light input:focus,
+.light select:focus,
+.light textarea:focus {
+  border-color: #4f46e5 !important;
 }
 
+/* Status/Highlight Colors: Light Mode enhancement to prevent dim/unreadable pastel colors */
+.light .text-violet-400,
+.light .text-violet-500,
+.light .text-purple-400,
+.light .text-purple-500 {
+  color: #7c3aed !important;
+}
+.light .text-indigo-350,
+.light .text-indigo-400,
+.light .text-indigo-500 {
+  color: #4f46e5 !important;
+}
+.light .text-emerald-300,
+.light .text-emerald-400,
+.light .text-emerald-500,
+.light .text-green-400 {
+  color: #059669 !important;
+}
+.light .text-blue-400,
+.light .text-blue-500,
+.light .text-sky-300,
+.light .text-sky-400,
+.light .text-sky-500 {
+  color: #0284c7 !important;
+}
+.light .text-amber-400,
+.light .text-amber-500 {
+  color: #b45309 !important;
+}
+.light .text-red-400,
+.light .text-red-500,
+.light .text-rose-300 {
+  color: #dc2626 !important;
+}
+
+/* Base custom resets */
+.light th {
+  color: #1f2937 !important;
+}

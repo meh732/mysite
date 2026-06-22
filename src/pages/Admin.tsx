@@ -6,7 +6,7 @@ import {
   X, ToggleLeft, ToggleRight, Loader2, Eye, EyeOff, AlertCircle, ShoppingCart, RefreshCw, Sparkles, Folder, GitMerge, FileText
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { Product, Order, Group, SubGroup } from '../types';
+import { Product, Order, Group, SubGroup, ProductVariation } from '../types';
 
 export default function Admin() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -32,6 +32,9 @@ export default function Admin() {
     socialInstagram: '',
     socialTelegram: '',
     socialWhatsapp: '',
+    socialBale: '',
+    socialX: '',
+    registrationMethod: 'both',
     contactPhone: '',
     contactEmail: '',
     contactAddress: '',
@@ -41,10 +44,11 @@ export default function Admin() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [subGroups, setSubGroups] = useState<SubGroup[]>([]);
+  const [adminTransactions, setAdminTransactions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   // Sub tab inside "سفارشات/محصولات"
-  const [productsSubTab, setProductsSubTab] = useState<'products' | 'orders' | 'groups' | 'subgroups'>('products');
+  const [productsSubTab, setProductsSubTab] = useState<'products' | 'orders' | 'groups' | 'subgroups' | 'transactions'>('products');
 
   // --- Product CRUD Form / Modal State ---
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -61,6 +65,7 @@ export default function Admin() {
   const [formGroupId, setFormGroupId] = useState<number | undefined>(undefined);
   const [formSubGroupId, setFormSubGroupId] = useState<number | undefined>(undefined);
   const [formImage, setFormImage] = useState('');
+  const [formVariations, setFormVariations] = useState<ProductVariation[]>([]);
 
   // --- Group CRUD Dialog states ---
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
@@ -95,8 +100,9 @@ export default function Admin() {
     const p3 = fetch('/api/orders').then(r => r.json()).then(d => setOrders(d));
     const p4 = fetch('/api/groups').then(r => r.json()).then(d => setGroups(d));
     const p5 = fetch('/api/subgroups').then(r => r.json()).then(d => setSubGroups(d));
+    const p6 = fetch('/api/admin/transactions').then(r => r.json()).then(d => setAdminTransactions(d)).catch(() => {});
     
-    Promise.all([p1, p2, p3, p4, p5])
+    Promise.all([p1, p2, p3, p4, p5, p6])
       .catch((err) => console.error("Error fetching admin metrics:", err))
       .finally(() => setIsLoading(false));
   };
@@ -154,6 +160,7 @@ export default function Admin() {
     setFormGroupId(groups[0]?.id || undefined);
     setFormSubGroupId(undefined);
     setFormImage('');
+    setFormVariations([]);
     setIsProductModalOpen(true);
   };
 
@@ -170,6 +177,7 @@ export default function Admin() {
     setFormGroupId(prod.groupId);
     setFormSubGroupId(prod.subGroupId);
     setFormImage(prod.image || '');
+    setFormVariations(prod.variations || []);
     setIsProductModalOpen(true);
   };
 
@@ -191,7 +199,8 @@ export default function Admin() {
       specs: formSpecs,
       groupId: formGroupId ? Number(formGroupId) : undefined,
       subGroupId: formSubGroupId ? Number(formSubGroupId) : undefined,
-      image: formImage
+      image: formImage,
+      variations: formVariations
     };
 
     if (editingProduct) {
@@ -663,6 +672,12 @@ export default function Admin() {
                 >
                   🧾 سفارشات ({orders.length})
                 </button>
+                <button 
+                  onClick={() => setProductsSubTab('transactions')} 
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${productsSubTab === 'transactions' ? 'bg-indigo-500 text-white' : 'bg-zinc-900 text-zinc-400 border border-zinc-800'}`}
+                >
+                  💳 تایید واریزها ({adminTransactions.filter(t => t.status === 'pending').length})
+                </button>
               </div>
             </header>
 
@@ -699,7 +714,7 @@ export default function Admin() {
                           <tr key={g.id} className="border-b border-zinc-850/60 hover:bg-zinc-900/20 transition-colors">
                             <td className="px-6 py-3">
                               {g.image ? (
-                                <img src={g.image} alt={g.title} className="w-10 h-10 object-cover rounded-lg border border-zinc-800" referrerPolicy="no-referrer" />
+                                <img src={g.image} alt={g.title} className="w-10 h-10 object-contain p-0.5 bg-white rounded-lg border border-zinc-800" referrerPolicy="no-referrer" />
                               ) : (
                                 <div className="w-10 h-10 bg-zinc-800 rounded-lg flex items-center justify-center text-[10px] text-zinc-500">بدون عکس</div>
                               )}
@@ -774,7 +789,7 @@ export default function Admin() {
                             <tr key={sg.id} className="border-b border-zinc-850/60 hover:bg-zinc-900/20 transition-colors">
                               <td className="px-6 py-3">
                                 {sg.image ? (
-                                  <img src={sg.image} alt={sg.title} className="w-10 h-10 object-cover rounded-lg border border-zinc-800" referrerPolicy="no-referrer" />
+                                  <img src={sg.image} alt={sg.title} className="w-10 h-10 object-contain p-0.5 bg-white rounded-lg border border-zinc-800" referrerPolicy="no-referrer" />
                                 ) : (
                                   <div className="w-10 h-10 bg-zinc-800 rounded-lg flex items-center justify-center text-[10px] text-zinc-500">بدون عکس</div>
                                 )}
@@ -857,7 +872,7 @@ export default function Admin() {
                                <td className="px-6 py-4 font-bold text-zinc-200">
                                  <div className="flex items-center gap-3">
                                    {p.image ? (
-                                     <img src={p.image} alt={p.title} className="w-10 h-10 object-cover rounded-lg border border-zinc-800" referrerPolicy="no-referrer" />
+                                     <img src={p.image} alt={p.title} className="w-10 h-10 object-contain p-0.5 bg-white rounded-lg border border-zinc-200" referrerPolicy="no-referrer" />
                                    ) : (
                                      <div className="w-10 h-10 bg-zinc-805/70 rounded-lg flex items-center justify-center text-zinc-500 text-xs select-none border border-zinc-800">
                                        {p.icon}
@@ -927,7 +942,7 @@ export default function Admin() {
                   </div>
                 </div>
               </div>
-            ) : (
+            ) : productsSubTab === 'orders' ? (
               // Order Sub-Tab Panel for Administrators
               <div className="space-y-6">
                 <div className="bg-zinc-900/20 p-4 rounded-xl border border-zinc-850">
@@ -1006,6 +1021,115 @@ export default function Admin() {
                         {orders.length === 0 && (
                           <tr>
                             <td colSpan={8} className="text-center py-12 text-zinc-500">هیچ سفارشی تاکنون ثبت نشده است.</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="bg-zinc-900/20 p-5 rounded-3xl border border-zinc-850">
+                  <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                    <Database className="w-5 h-5 text-indigo-400" />
+                    تایید تراکنش‌های واریزی و شارژ کیف پول دستی (کارت به کارت)
+                  </h3>
+                  <p className="text-xs text-zinc-500 pb-4 border-b border-zinc-900">
+                    رسیدهای آپلود شده توسط کاربران در سایت یا ربات را بررسی کنید. در صورت تطبیق وجه، تراکنش را «تایید» کنید تا کیف پول کاربر فوراً شارژ شود و پیامک/نوتیفیکیشن بات ارسال گردد.
+                  </p>
+
+                  <div className="overflow-x-auto mt-6">
+                    <table className="w-full text-zinc-400 text-right text-sm">
+                      <thead>
+                        <tr className="border-b border-zinc-900 text-zinc-450 border-zinc-800">
+                          <th className="py-3 px-4 text-right">شناسه</th>
+                          <th className="py-3 px-4 text-right">کاربر (موبایل/ایمیل)</th>
+                          <th className="py-3 px-4 text-right">مبلغ اعلامی</th>
+                          <th className="py-3 px-4 text-right">واریز کننده</th>
+                          <th className="py-3 px-4 text-right">شرح تراکنش</th>
+                          <th className="py-3 px-4 text-right">وضعیت فیش</th>
+                          <th className="py-3 px-4 text-center">جزئیات / رسید تصویری</th>
+                          <th className="py-3 px-4 text-center">اقدام‌ها</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {adminTransactions.map((tx) => (
+                          <tr key={tx.id} className="border-b border-zinc-900 hover:bg-zinc-900/10 transition-all text-xs">
+                            <td className="py-4 px-4 font-mono font-bold text-zinc-400">#{tx.id}</td>
+                            <td className="py-4 px-4 text-zinc-300 font-semibold">{tx.userIdentifier}</td>
+                            <td className="py-4 px-4 font-bold text-indigo-400">
+                              {Number(tx.amount || 0) > 0 ? `${Number(tx.amount).toLocaleString('fa-IR')} تومان` : 'نامشخص'}
+                            </td>
+                            <td className="py-4 px-4 text-zinc-400">{tx.cardHolderName || 'ثبت نشده'}</td>
+                            <td className="py-4 px-4 text-zinc-500">{tx.description}</td>
+                            <td className="py-4 px-4">
+                              {tx.status === 'approved' && <span className="text-[10px] text-emerald-450 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full font-bold">تایید شده ✅</span>}
+                              {tx.status === 'rejected' && <span className="text-[10px] text-red-450 text-red-400 bg-red-450/10 border border-red-500/20 px-2.5 py-1 rounded-full font-bold">لغو/رد شده ❌</span>}
+                              {tx.status === 'pending' && <span className="text-[10px] text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full font-bold animate-pulse">در انتظار تایید ⏳</span>}
+                              {!tx.status && <span className="text-[10px] text-zinc-450 bg-zinc-800 px-2.5 py-1 rounded-full">سیستمی ⚙️</span>}
+                            </td>
+                            <td className="py-4 px-4 text-center font-mono">
+                              {tx.receiptImage ? (
+                                <a
+                                  href={tx.receiptImage.startsWith('http') ? tx.receiptImage : `https://api.telegram.org/file/bot${adminSettings.telegramToken}/${tx.receiptImage}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-indigo-400 hover:underline text-xs bg-indigo-500/5 px-2.5 py-1.5 rounded-lg border border-indigo-500/10 transition-all"
+                                >
+                                  مشاهده فیش ارسالی 👁️
+                                </a>
+                              ) : (
+                                <span className="text-zinc-600 text-xs">فاقد پیوست تصویری</span>
+                              )}
+                            </td>
+                            <td className="py-4 px-4 text-center">
+                              {tx.status === 'pending' ? (
+                                <div className="flex items-center justify-center gap-2">
+                                  <button
+                                    onClick={() => {
+                                      if (confirm('آیا از تایید این واریزی و افزایش شارژ کیف پول کاربر مطمئن هستید؟')) {
+                                        fetch(`/api/admin/transactions/${tx.id}/approve`, { method: 'POST' })
+                                          .then(r => r.json())
+                                          .then(res => {
+                                            if (res.success) {
+                                              alert('واریز وجه با موفقیت تایید و کاربر شارژ شد!');
+                                              loadAllData();
+                                            }
+                                          });
+                                      }
+                                    }}
+                                    className="bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer shadow shadow-emerald-500/10"
+                                  >
+                                    تایید واریز
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      if (confirm('آیا مایل به رد این درخواست پرداخت هستید؟')) {
+                                        fetch(`/api/admin/transactions/${tx.id}/reject`, { method: 'POST' })
+                                          .then(r => r.json())
+                                          .then(res => {
+                                            if (res.success) {
+                                              alert('درخواست رد شد.');
+                                              loadAllData();
+                                            }
+                                          });
+                                      }
+                                    }}
+                                    className="bg-red-500 hover:bg-red-600 text-white text-[11px] px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer shadow shadow-red-500/10"
+                                  >
+                                    رد فیش
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="text-zinc-650 text-xs">-</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                        {adminTransactions.length === 0 && (
+                          <tr>
+                            <td colSpan={8} className="text-center py-12 text-zinc-500 italic">هیچ تراکنش یا رسیدی ثبت نشده است.</td>
                           </tr>
                         )}
                       </tbody>
@@ -1251,6 +1375,28 @@ export default function Admin() {
                        placeholder="https://wa.me/number" 
                      />
                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-zinc-300 block mb-2">لینک یا آیدی ربات/کانال بله</label>
+                      <input 
+                        type="text" 
+                        value={adminSettings.socialBale || ''} 
+                        onChange={e => setAdminSettings({...adminSettings, socialBale: e.target.value})} 
+                        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-white outline-none focus:border-indigo-500 text-sm" 
+                        dir="ltr" 
+                        placeholder="https://ble.ir/digital_store" 
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-zinc-300 block mb-2">لینک اکانت یا آیدی X (توئیتر سابق)</label>
+                      <input 
+                        type="text" 
+                        value={adminSettings.socialX || ''} 
+                        onChange={e => setAdminSettings({...adminSettings, socialX: e.target.value})} 
+                        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-white outline-none focus:border-indigo-500 text-sm" 
+                        dir="ltr" 
+                        placeholder="https://x.com/digital_store" 
+                      />
+                    </div>
                    <div>
                      <label className="text-sm font-medium text-zinc-300 block mb-2">تلفن تماس مدیریت / پشتیبانی</label>
                      <input 
@@ -1285,7 +1431,33 @@ export default function Admin() {
                  </div>
               </div>
 
-               <button onClick={handleSaveSettings} className="bg-indigo-500 hover:bg-indigo-600 px-6 py-3 rounded-xl font-bold transition-all shadow-md shadow-indigo-500/10 cursor-pointer">
+               
+
+               <div className="glass-panel p-6 border border-zinc-805/40 bg-zinc-900/30 rounded-2xl mb-6">
+                  <h3 className="font-bold text-lg mb-4 text-white flex items-center gap-2 font-sans">
+                    <Users className="w-5 h-5 text-indigo-400" />
+                    تنظیمات عضویت و ثبت‌نام مراجعین (احراز هویت تجاری)
+                  </h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-sm font-medium text-zinc-300 block mb-2">روش‌های مجاز ثبت‌نام مراجعین:</label>
+                      <select
+                        value={adminSettings.registrationMethod || 'both'}
+                        onChange={e => setAdminSettings({...adminSettings, registrationMethod: e.target.value})}
+                        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-white outline-none focus:border-indigo-500 text-xs cursor-pointer"
+                      >
+                        <option value="both">✨ فعال بودن هر دو روش تجاری (عضویت با ایمیل یا موبایل - منعطف)</option>
+                        <option value="email_only">📧 اجبار مراجعین به ثبت‌نام رسمی فقط با آدرس ایمیل و کلمه عبور</option>
+                        <option value="phone_only">📱 اجبار مراجعین به ثبت‌نام امن فقط با شماره همراه و کلمه عبور (بدون نیاز به ایمیل)</option>
+                      </select>
+                      <p className="text-[11px] text-zinc-550 dark:text-zinc-500 mt-2 leading-relaxed">
+                        با انتخاب یکی از متدهای اختصاصی، فیلد نامرتبط در فرم ثبت‌نام وب‌سایت پنهان شده و سیستم مراجع را ترغیب خواهد کرد تا طبق الگوی تجاری شما حساب خود را ثبت نماید. این متد کاملاً به فلو ثبت‌نام بک‌اند متصل است.
+                      </p>
+                    </div>
+                  </div>
+               </div>
+
+<button onClick={handleSaveSettings} className="bg-indigo-500 hover:bg-indigo-600 px-6 py-3 rounded-xl font-bold transition-all shadow-md shadow-indigo-500/10 cursor-pointer">
                  ذخیره قطعی تمامی تنظیمات
                </button>
              </div>
@@ -1549,6 +1721,112 @@ export default function Admin() {
                     placeholder="مثال:&#10;پشتیبانی ۲۴ ساعته اختصاصی ادمین&#10;تضمین بازگشت وجه تا ۷ روز&#10;سرعت فوق‌العاده بالا و پایداری بالا"
                     className="w-full bg-zinc-900 border border-indigo-550/10 rounded-xl px-4 py-2.5 text-xs text-zinc-200 focus:border-indigo-500 transition-colors outline-none"
                   ></textarea>
+                </div>
+
+                {/* Specific Tier Variations Editor */}
+                <div className="border border-zinc-900 bg-zinc-900/40 rounded-2xl p-4 space-y-4">
+                  <h3 className="text-sm font-bold text-indigo-400 flex items-center gap-1.5 pb-2 border-b border-zinc-850">
+                    <Sparkles className="w-4 h-4" />
+                    تعریف بسته‌ها و گزینه‌های فرعی قیمت (Product Variations & Tiers)
+                  </h3>
+
+                  {formVariations.length > 0 ? (
+                    <div className="space-y-2 text-xs">
+                      {formVariations.map((v, idx) => (
+                        <div key={idx} className="flex items-center justify-between bg-zinc-950/80 border border-zinc-850 p-2.5 rounded-xl">
+                          <div>
+                            <span className="text-zinc-250 font-bold">{v.duration}</span>
+                            <span className="text-zinc-400 mx-1">({v.provider})</span>
+                            <span className="text-zinc-400">- {v.type}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-indigo-400 font-sans font-medium">{Number(v.price).toLocaleString('fa-IR')} تومان</span>
+                            <button
+                              type="button"
+                              onClick={() => setFormVariations(formVariations.filter((_, i) => i !== idx))}
+                              className="text-red-400 hover:text-red-300 p-1 bg-red-400/10 rounded-lg hover:bg-red-500/20 transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-zinc-500 italic pr-2">هیچ بسته یا تعرفه قیمت فرعی ایجاد نشده است. (در صورت عدم ایجاد، کلیک روی محصول با تک قیمت پیشفرض در بات انجام می‌شود.)</p>
+                  )}
+
+                  {/* Add variation fields */}
+                  <div className="bg-zinc-950/60 p-3 rounded-xl border border-zinc-900 space-y-3">
+                    <p className="text-[11px] font-medium text-zinc-400">مثال: اکانت یک‌ماهه OpenAI، اشتراکی، ۱۰۰,۰۰۰ تومان</p>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <input
+                          id="newVarDuration"
+                          type="text"
+                          placeholder="مدت (مثلا: ۱ ماهه)"
+                          className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1.5 text-white outline-none"
+                        />
+                      </div>
+                      <div>
+                        <input
+                          id="newVarProvider"
+                          type="text"
+                          placeholder="ارائه‌دهنده (مثلا: ChatGPT Plus)"
+                          className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1.5 text-white outline-none"
+                        />
+                      </div>
+                      <div>
+                        <input
+                          id="newVarType"
+                          type="text"
+                          placeholder="نوع (مثلا: اختصاصی / تمدید)"
+                          className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1.5 text-white outline-none"
+                        />
+                      </div>
+                      <div>
+                        <input
+                          id="newVarPrice"
+                          type="number"
+                          placeholder="قیمت تومان (مثلا: 150000)"
+                          className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1.5 text-white outline-none font-mono"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const durInput = document.getElementById('newVarDuration') as HTMLInputElement;
+                        const provInput = document.getElementById('newVarProvider') as HTMLInputElement;
+                        const typeInput = document.getElementById('newVarType') as HTMLInputElement;
+                        const priceInput = document.getElementById('newVarPrice') as HTMLInputElement;
+
+                        if (!durInput.value || !priceInput.value) {
+                          alert('وارد کردن حداقل مدت و قیمت عددی الزامی است.');
+                          return;
+                        }
+
+                        const newVar: ProductVariation = {
+                          id: String(Date.now()),
+                          duration: durInput.value,
+                          provider: provInput.value || 'نامشخص',
+                          type: typeInput.value || 'اکانت فرعی',
+                          price: parseInt(priceInput.value, 10)
+                        };
+
+                        setFormVariations([...formVariations, newVar]);
+
+                        // Reset input values
+                        durInput.value = '';
+                        provInput.value = '';
+                        typeInput.value = '';
+                        priceInput.value = '';
+                      }}
+                      className="w-full bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 text-xs py-2 rounded-xl border border-indigo-500/20 transition-all font-bold cursor-pointer"
+                    >
+                      افزودن این بسته قیمت +
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex gap-3 pt-4 border-t border-zinc-850 mt-6">

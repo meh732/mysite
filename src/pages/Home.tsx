@@ -4,7 +4,7 @@ import {
   Apple, Bot, MessagesSquare, Smartphone, Globe, ShoppingCart, 
   ChevronLeft, ChevronRight, ChevronDown, ShieldCheck, Store, LayoutDashboard, User, 
   Palette, Code, CheckCircle2, Loader2, Coins, ArrowRight, HelpCircle,
-  Folder, GitMerge, Sparkles, Layers, Zap, Grid, Instagram, Send, Phone, Mail, MapPin
+  Folder, GitMerge, Sparkles, Layers, Zap, Grid, Instagram, Send, Phone, Mail, MapPin, Twitter
 } from 'lucide-react';
 import { Product, Group, SubGroup } from '../types';
 import { Link, useNavigate } from 'react-router-dom';
@@ -41,7 +41,7 @@ export default function Home() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [subGroups, setSubGroups] = useState<SubGroup[]>([]);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-  const [authTab, setAuthTab] = useState<'login' | 'register'>('login');
+  const [authTab, setAuthTab] = useState<'login' | 'register' | 'forgot'>('login');
   const [passwordLogin, setPasswordLogin] = useState(true);
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -49,6 +49,13 @@ export default function Home() {
   const [registerEmail, setRegisterEmail] = useState('');
   const [registerPhone, setRegisterPhone] = useState('');
   const [registerPassword, setRegisterPassword] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [phoneError, setPhoneError] = useState('');
+  const [forgotIdentifier, setForgotIdentifier] = useState('');
+  const [forgotOtpSent, setForgotOtpSent] = useState(false);
+  const [forgotOtpCode, setForgotOtpCode] = useState('');
+  const [forgotNewPassword, setForgotNewPassword] = useState('');
+  const [forgotIsSubmitting, setForgotIsSubmitting] = useState(false);
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [loginMethod, setLoginMethod] = useState<'email' | 'phone'>('email');
@@ -59,6 +66,9 @@ export default function Home() {
     socialInstagram: '',
     socialTelegram: '',
     socialWhatsapp: '',
+    socialBale: '',
+    socialX: '',
+    registrationMethod: 'both',
     contactPhone: '',
     contactEmail: '',
     contactAddress: '',
@@ -116,6 +126,9 @@ export default function Home() {
           socialInstagram: d.socialInstagram || '',
           socialTelegram: d.socialTelegram || '',
           socialWhatsapp: d.socialWhatsapp || '',
+          socialBale: d.socialBale || '',
+          socialX: d.socialX || '',
+          registrationMethod: d.registrationMethod || 'both',
           contactPhone: d.contactPhone || '',
           contactEmail: d.contactEmail || '',
           contactAddress: d.contactAddress || '',
@@ -187,8 +200,134 @@ export default function Home() {
     });
   };
 
+  // Check email validation and duplication
+  useEffect(() => {
+    if (!registerEmail.trim()) {
+      setEmailError('');
+      return;
+    }
+    const timeout = setTimeout(() => {
+      fetch('/api/auth/check-duplicate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: registerEmail })
+      })
+      .then(r => r.json())
+      .then(res => {
+        if (res.exists) {
+          setEmailError(res.message);
+        } else {
+          setEmailError('');
+        }
+      })
+      .catch(() => {});
+    }, 500);
+    return () => clearTimeout(timeout);
+  }, [registerEmail]);
+
+  // Check phone duplication
+  useEffect(() => {
+    if (!registerPhone.trim()) {
+      setPhoneError('');
+      return;
+    }
+    const timeout = setTimeout(() => {
+      fetch('/api/auth/check-duplicate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: registerPhone })
+      })
+      .then(r => r.json())
+      .then(res => {
+        if (res.exists) {
+          setPhoneError(res.message);
+        } else {
+          setPhoneError('');
+        }
+      })
+      .catch(() => {});
+    }, 500);
+    return () => clearTimeout(timeout);
+  }, [registerPhone]);
+
+  const handleForgotPasswordSend = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotIdentifier.trim()) {
+      showToast('شناسه ورود الزامی است', 'error');
+      return;
+    }
+    setForgotIsSubmitting(true);
+    fetch('/api/auth/forgot-password/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier: forgotIdentifier })
+    })
+    .then(r => r.json())
+    .then(res => {
+      setForgotIsSubmitting(false);
+      if (res.success) {
+        setForgotOtpSent(true);
+        showToast(res.message || 'کد بازیابی ارسال شد', 'success');
+      } else {
+        showToast(res.message || 'خطا در ارسال کد', 'error');
+      }
+    })
+    .catch(() => {
+      setForgotIsSubmitting(false);
+      showToast('خطا در ارتباط با سرور', 'error');
+    });
+  };
+
+  const handleForgotPasswordReset = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotOtpCode || !forgotNewPassword) {
+      showToast('کد و کلمه عبور جدید الزامی هستند', 'error');
+      return;
+    }
+    setForgotIsSubmitting(true);
+    fetch('/api/auth/forgot-password/verify-reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        identifier: forgotIdentifier,
+        code: forgotOtpCode,
+        newPassword: forgotNewPassword
+      })
+    })
+    .then(r => r.json())
+    .then(res => {
+      setForgotIsSubmitting(false);
+      if (res.success) {
+        showToast(res.message || 'کلمه عبور با موفقیت بروزرسانی شد', 'success');
+        setAuthTab('login');
+        setPasswordLogin(true);
+        setLoginIdentifier(forgotIdentifier);
+        setLoginPassword(forgotNewPassword);
+        // Clear forgot states
+        setForgotIdentifier('');
+        setForgotOtpSent(false);
+        setForgotOtpCode('');
+        setForgotNewPassword('');
+      } else {
+        showToast(res.message || 'کد وارد شده نامعتبر یا منقضی شده است', 'error');
+      }
+    })
+    .catch(() => {
+      setForgotIsSubmitting(false);
+      showToast('خطا در ارتباط با سرور', 'error');
+    });
+  };
+
   const handleRegister = (e: React.FormEvent) => {
     e.preventDefault();
+    if (emailError) {
+      showToast(emailError, 'error');
+      return;
+    }
+    if (phoneError) {
+      showToast(phoneError, 'error');
+      return;
+    }
     if (!registerName.trim()) {
       showToast('نام و نام خانوادگی الزامی است', 'error');
       return;
@@ -473,7 +612,7 @@ export default function Home() {
             ) : (
               <button 
                 onClick={() => setIsLoginModalOpen(true)} 
-                className="bg-white text-black px-5 py-2.5 rounded-full font-medium text-sm hover:bg-zinc-200 transition-colors flex items-center gap-2 cursor-pointer"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white dark:bg-white dark:hover:bg-zinc-100 dark:text-black px-5 py-2.5 rounded-full font-medium text-sm transition-colors flex items-center gap-2 cursor-pointer shadow-sm dark:shadow-none"
               >
                 <User className="w-4 h-4" />
                 ورود / عضویت
@@ -501,24 +640,108 @@ export default function Home() {
               </button>
 
               {/* Tab Selector */}
-              <div className="flex bg-zinc-900 rounded-xl p-1 mb-6">
-                <button 
-                  type="button" 
-                  onClick={() => { setAuthTab('login'); setOtpSent(false); }} 
-                  className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${authTab === 'login' ? 'bg-indigo-600 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                >
-                  ورود به حساب
-                </button>
-                <button 
-                  type="button" 
-                  onClick={() => { setAuthTab('register'); setOtpSent(false); }} 
-                  className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${authTab === 'register' ? 'bg-indigo-600 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                >
-                  عضویت جدید
-                </button>
-              </div>
+              {authTab !== 'forgot' && (
+                <div className="flex bg-zinc-900 rounded-xl p-1 mb-6">
+                  <button 
+                    type="button" 
+                    onClick={() => { setAuthTab('login'); setOtpSent(false); }} 
+                    className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${authTab === 'login' ? 'bg-indigo-600 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                  >
+                    ورود به حساب
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => { setAuthTab('register'); setOtpSent(false); }} 
+                    className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${authTab === 'register' ? 'bg-indigo-600 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                  >
+                    عضویت جدید
+                  </button>
+                </div>
+              )}
 
-              {authTab === 'login' ? (
+              {authTab === 'forgot' ? (
+                <div className="space-y-4">
+                  <div className="text-center mb-6">
+                    <h3 className="text-xl font-bold mb-1">بازیابی کلمه عبور</h3>
+                    <p className="text-[11px] text-zinc-400">شناسه ورود (ایمیل یا شماره موبایل) خود را جهت دریافت کد وارد کنید:</p>
+                  </div>
+
+                  {!forgotOtpSent ? (
+                    <form onSubmit={handleForgotPasswordSend} className="space-y-4">
+                      <div>
+                        <label className="text-[10px] text-zinc-400 block mb-1">ایمیل یا شماره موبایل شما:</label>
+                        <input 
+                          type="text" 
+                          placeholder="example@mail.com یا 09121234567"
+                          value={forgotIdentifier}
+                          onChange={e => setForgotIdentifier(e.target.value)}
+                          dir="ltr"
+                          required
+                          className="w-full bg-zinc-900 border border-zinc-800 text-white focus:border-indigo-500 rounded-xl px-4 py-2.5 text-center text-sm outline-none transition-colors"
+                        />
+                      </div>
+                      <button 
+                        type="submit"
+                        disabled={forgotIsSubmitting}
+                        className="w-full bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white rounded-xl py-3 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2"
+                      >
+                        {forgotIsSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                        {forgotIsSubmitting ? 'در حال ارسال کد...' : 'ارسال کد بازیابی'}
+                      </button>
+                    </form>
+                  ) : (
+                    <form onSubmit={handleForgotPasswordReset} className="space-y-4">
+                      <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 p-3 rounded-lg text-center text-[11px] leading-relaxed">
+                        کد تایید بازیابی یکبار مصرف به {forgotIdentifier} ارسال شد. در صورت لزوم می‌توانید مجددا تلاش کنید.
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-zinc-400 block mb-1">کد تایید (6 رقمی):</label>
+                        <input 
+                          type="text" 
+                          placeholder="مثلا 123456"
+                          value={forgotOtpCode}
+                          onChange={e => setForgotOtpCode(e.target.value)}
+                          dir="ltr"
+                          required
+                          className="w-full bg-zinc-900 border border-zinc-800 text-white focus:border-indigo-500 rounded-xl px-4 py-2.5 text-center text-sm outline-none tracking-widest font-mono transition-colors"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-zinc-400 block mb-1">کلمه عبور جدید شما:</label>
+                        <input 
+                          type="password" 
+                          placeholder="••••••••"
+                          value={forgotNewPassword}
+                          onChange={e => setForgotNewPassword(e.target.value)}
+                          dir="ltr"
+                          required
+                          className="w-full bg-zinc-900 border border-zinc-800 text-white focus:border-indigo-500 rounded-xl px-4 py-2.5 text-center text-sm outline-none transition-colors"
+                        />
+                      </div>
+                      <button 
+                        type="submit"
+                        disabled={forgotIsSubmitting}
+                        className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl py-3 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2"
+                      >
+                        {forgotIsSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                        {forgotIsSubmitting ? 'در حال بروزرسانی...' : 'بروزرسانی کلمه عبور جدید'}
+                      </button>
+                    </form>
+                  )}
+
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setAuthTab('login');
+                      setForgotOtpSent(false);
+                      setForgotOtpCode('');
+                    }}
+                    className="w-full text-indigo-400 hover:text-indigo-300 text-xs text-center block mt-2 cursor-pointer transition-colors"
+                  >
+                    ← بازگشت به صفحه ورود
+                  </button>
+                </div>
+              ) : authTab === 'login' ? (
                 <>
                   <div className="text-center mb-6">
                     <h3 className="text-xl font-bold mb-1">ورود به حساب کاربری</h3>
@@ -551,7 +774,20 @@ export default function Home() {
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] text-zinc-400 block mb-1">کلمه عبور شما:</label>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-[10px] text-zinc-400 block">کلمه عبور شما:</label>
+                          <button 
+                            type="button" 
+                            onClick={() => {
+                              setForgotIdentifier(loginIdentifier);
+                              setAuthTab('forgot');
+                              setForgotOtpSent(false);
+                            }}
+                            className="text-[9px] text-indigo-400 hover:text-indigo-300 hover:underline cursor-pointer"
+                          >
+                            فراموشی رمز عبور؟
+                          </button>
+                        </div>
                         <input 
                           type="password" 
                           placeholder="••••••••"
@@ -662,31 +898,51 @@ export default function Home() {
                     />
                   </div>
 
-                  <div>
-                    <label className="text-[10px] text-zinc-400 block mb-1">آدرس ایمیل (اختیاری):</label>
-                    <input 
-                      type="email" 
-                      placeholder="yourname@gmail.com"
-                      value={registerEmail}
-                      onChange={e => setRegisterEmail(e.target.value)}
-                      dir="ltr"
-                      className="w-full bg-zinc-900 border border-zinc-800 text-white focus:border-indigo-500 rounded-xl px-4 py-2 text-xs outline-none transition-colors"
-                    />
-                  </div>
+                  {siteConfig.registrationMethod !== 'phone_only' && (
+                    <div>
+                      <label className="text-[10px] text-zinc-400 block mb-1">آدرس ایمیل {siteConfig.registrationMethod === 'email_only' ? '*(اجباری)' : '(اختیاری)'}:</label>
+                      <input 
+                        type="email" 
+                        placeholder="yourname@gmail.com"
+                        value={registerEmail}
+                        onChange={e => setRegisterEmail(e.target.value)}
+                        dir="ltr"
+                        required={siteConfig.registrationMethod === 'email_only'}
+                        className={`w-full bg-zinc-900 border text-white focus:border-indigo-500 rounded-xl px-4 py-2 text-xs outline-none transition-colors ${emailError ? 'border-red-500/80' : 'border-zinc-800'}`}
+                      />
+                      {emailError && (
+                        <p className="text-[9px] text-rose-400 mt-1 flex items-center gap-1">
+                          ⚠️ {emailError}
+                        </p>
+                      )}
+                    </div>
+                  )}
 
-                  <div>
-                    <label className="text-[10px] text-zinc-400 block mb-1">شماره موبایل (اختیاری):</label>
-                    <input 
-                      type="tel" 
-                      placeholder="09121234567"
-                      value={registerPhone}
-                      onChange={e => setRegisterPhone(e.target.value)}
-                      dir="ltr"
-                      className="w-full bg-zinc-900 border border-zinc-800 text-white focus:border-indigo-500 rounded-xl px-4 py-2 text-xs outline-none transition-colors"
-                    />
-                  </div>
+                  {siteConfig.registrationMethod !== 'email_only' && (
+                    <div>
+                      <label className="text-[10px] text-zinc-400 block mb-1">شماره همراه مراجع {siteConfig.registrationMethod === 'phone_only' ? '*(اجباری)' : '(اختیاری)'}:</label>
+                      <input 
+                        type="tel" 
+                        placeholder="09121234567"
+                        value={registerPhone}
+                        onChange={e => setRegisterPhone(e.target.value)}
+                        dir="ltr"
+                        required={siteConfig.registrationMethod === 'phone_only'}
+                        className={`w-full bg-zinc-900 border text-white focus:border-indigo-500 rounded-xl px-4 py-2 text-xs outline-none transition-colors ${phoneError ? 'border-red-500/80' : 'border-zinc-800'}`}
+                      />
+                      {phoneError && (
+                        <p className="text-[9px] text-rose-400 mt-1 flex items-center gap-1">
+                          ⚠️ {phoneError}
+                        </p>
+                      )}
+                    </div>
+                  )}
 
-                  <p className="text-[9px] text-indigo-300">💡 وارد کردن حداقل یکی از موارد فوق (ایمیل یا موبایل) کافیست.</p>
+                  {siteConfig.registrationMethod === 'both' ? (
+                    <p className="text-[9px] text-indigo-300">💡 وارد کردن حداقل یکی از موارد فوق (ایمیل یا همراه) در متد ثبت‌نام تجاری آزاد کافیست.</p>
+                  ) : (
+                    <p className="text-[9px] text-rose-300">💡 طبق الگوی احراز هویت ادمین، تکمیل فیلد اجباری فوق الزامی است.</p>
+                  )}
 
                   <div>
                     <label className="text-[10px] text-zinc-400 block mb-1">تعیین کلمه عبور:</label>
@@ -703,7 +959,8 @@ export default function Home() {
 
                   <button 
                     type="submit"
-                    className="w-full bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl py-2.5 text-xs font-bold transition-colors cursor-pointer"
+                    disabled={!!emailError || !!phoneError}
+                    className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white rounded-xl py-2.5 text-xs font-bold transition-colors cursor-pointer"
                   >
                     ثبت نام و شروع خرید
                   </button>
@@ -984,9 +1241,9 @@ export default function Home() {
                               className="glass-panel p-6 hover:border-indigo-500/50 dark:hover:border-indigo-400/50 transition-all duration-300 group cursor-pointer hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-500/5 flex flex-col justify-between"
                             >
                               <div>
-                                <div className="w-16 h-16 rounded-2xl bg-zinc-100 dark:bg-zinc-800/40 flex items-center justify-center mb-6 border border-zinc-200 dark:border-zinc-800/80 group-hover:scale-105 group-hover:border-indigo-500/30 transition-all overflow-hidden">
+                                <div className="w-16 h-16 rounded-2xl bg-white p-2 flex items-center justify-center mb-6 border border-zinc-200 dark:border-zinc-805 group-hover:scale-105 group-hover:border-indigo-500/30 transition-all overflow-hidden">
                                   {prod.image ? (
-                                    <img src={prod.image} alt={prod.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                    <img src={prod.image} alt={prod.title} className="w-full h-full object-contain" referrerPolicy="no-referrer" />
                                   ) : (
                                     IconMap[prod.icon] || <Coins className="text-indigo-500 dark:text-indigo-400 w-8 h-8" />
                                   )}
@@ -1032,9 +1289,9 @@ export default function Home() {
                               className="glass-panel p-6 hover:border-indigo-500/50 dark:hover:border-indigo-400/50 transition-all duration-300 group cursor-pointer hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-500/5 flex flex-col justify-between"
                             >
                               <div>
-                                <div className="w-16 h-16 rounded-2xl bg-zinc-100 dark:bg-zinc-800/40 flex items-center justify-center mb-6 border border-zinc-200 dark:border-zinc-800/80 group-hover:scale-105 group-hover:border-indigo-500/30 transition-all overflow-hidden">
+                                <div className="w-16 h-16 rounded-2xl bg-white p-2 flex items-center justify-center mb-6 border border-zinc-200 dark:border-zinc-805 group-hover:scale-105 group-hover:border-indigo-500/30 transition-all overflow-hidden">
                                   {prod.image ? (
-                                    <img src={prod.image} alt={prod.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                    <img src={prod.image} alt={prod.title} className="w-full h-full object-contain" referrerPolicy="no-referrer" />
                                   ) : (
                                     IconMap[prod.icon] || <Coins className="text-indigo-500 dark:text-indigo-400 w-8 h-8" />
                                   )}
@@ -1088,9 +1345,9 @@ export default function Home() {
                     className="glass-panel p-6 hover:border-indigo-500/50 dark:hover:border-indigo-400/50 transition-all duration-300 group cursor-pointer hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-500/5 flex flex-col justify-between"
                   >
                     <div>
-                      <div className="w-16 h-16 rounded-2xl bg-zinc-100 dark:bg-zinc-800/40 flex items-center justify-center mb-6 border border-zinc-200 dark:border-zinc-800/80 group-hover:scale-105 group-hover:border-indigo-500/30 transition-all overflow-hidden">
+                      <div className="w-16 h-16 rounded-2xl bg-white p-2 flex items-center justify-center mb-6 border border-zinc-200 dark:border-zinc-850 group-hover:scale-105 group-hover:border-indigo-500/30 transition-all overflow-hidden">
                         {prod.image ? (
-                          <img src={prod.image} alt={prod.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          <img src={prod.image} alt={prod.title} className="w-full h-full object-contain" referrerPolicy="no-referrer" />
                         ) : (
                           IconMap[prod.icon] || <Coins className="text-indigo-500 dark:text-indigo-400 w-8 h-8" />
                         )}
@@ -1227,7 +1484,7 @@ export default function Home() {
 
                         <div className="bg-zinc-900/30 p-4 rounded-xl border border-zinc-800/40 flex flex-col justify-between">
                           <div>
-                            <span className="block text-sm font-bold text-zinc-300">بستر میزبانی</span>
+                            <span className="block text-sm font-bold text-zinc-300">بستر میزان‌دهی ربات</span>
                             <span className="text-[10px] text-zinc-500">نحوه اجرای ربات/سایت</span>
                           </div>
                           <select 
@@ -1268,81 +1525,32 @@ export default function Home() {
 
                   {/* Authentification inside checkout flow (if not logged in) */}
                   {!isLogged ? (
-                    <div className="border-t border-zinc-800/60 pt-6">
-                      <div className="bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 p-4 rounded-xl mb-4 text-xs leading-relaxed text-center">
-                        برقراری هماهنگی، سفارش‌دهی و چت با ادمین در پنل نیاز به شماره تلفن یا ایمیل تایید شده دارد. لطفا مشخصات خود را وارد کنید:
+                    <div className="border-t border-zinc-850/60 pt-6 text-center">
+                      <div className="bg-amber-500/10 border border-amber-500/20 text-amber-300 p-4 rounded-xl mb-6 text-xs leading-relaxed">
+                        ⚠️ جهت ثبت سفارش جدید، هماهنگی و دسترسی به پنل کاربری لازم است ابتدا وارد حساب خود شوید و یا ثبت‌نام کنید.
                       </div>
                       
-                      <div className="space-y-4">
-                        {!otpSent ? (
-                          <div className="space-y-3">
-                            {enableMobileLogin && (
-                              <div className="flex bg-zinc-900 rounded-lg p-1">
-                                <button type="button" onClick={() => setLoginMethod('email')} className={`flex-1 py-1.5 text-xs rounded-md transition-colors ${loginMethod === 'email' ? 'bg-zinc-800 text-white' : 'text-zinc-500'}`}>ایمیل</button>
-                                <button type="button" onClick={() => setLoginMethod('phone')} className={`flex-1 py-1.5 text-xs rounded-md transition-colors ${loginMethod === 'phone' ? 'bg-zinc-800 text-white' : 'text-zinc-500'}`}>موبایل</button>
-                              </div>
-                            )}
-
-                            <div className="flex gap-2">
-                              {loginMethod === 'email' ? (
-                                <input 
-                                  type="email" 
-                                  placeholder="ایمیل خود را جهت دریافت کد وارد کنید"
-                                  value={email}
-                                  onChange={e => setEmail(e.target.value)}
-                                  className="flex-1 bg-zinc-900 border border-zinc-800/85 rounded-xl px-4 py-2.5 text-sm outline-none text-center"
-                                  dir="ltr"
-                                />
-                              ) : (
-                                <input 
-                                  type="tel" 
-                                  placeholder="شماره موبایل (مثلا 09121234567)"
-                                  value={phone}
-                                  onChange={e => setPhone(e.target.value)}
-                                  className="flex-1 bg-zinc-900 border border-zinc-800/85 rounded-xl px-4 py-2.5 text-sm outline-none text-center"
-                                  dir="ltr"
-                                />
-                              )}
-                              <button 
-                                type="button"
-                                onClick={handleSendOtp}
-                                disabled={loginMethod === 'email' ? !email.includes('@') : phone.length < 10}
-                                className="bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white rounded-xl px-4 text-sm font-medium transition-colors cursor-pointer"
-                              >
-                                ارسال کد
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="space-y-3">
-                            <p className="text-xs text-center text-zinc-400">کد تایید ارسال شد. لطفاً آن را وارد کنید:</p>
-                            <div className="flex gap-2">
-                              <input 
-                                type="text" 
-                                placeholder="کد تایید..."
-                                value={otpCode}
-                                onChange={e => setOtpCode(e.target.value)}
-                                className="flex-1 bg-zinc-900 border border-zinc-805/80 text-white rounded-xl px-4 py-2.5 text-sm outline-none text-center tracking-widest font-mono"
-                                dir="ltr"
-                              />
-                              <button 
-                                type="button"
-                                onClick={handleVerifyOtp}
-                                disabled={otpCode.length < 4}
-                                className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white rounded-xl px-6 text-sm font-medium transition-colors cursor-pointer"
-                              >
-                                تأیید ورود
-                              </button>
-                            </div>
-                            <button 
-                              type="button" 
-                              onClick={() => setOtpSent(false)} 
-                              className="text-xs text-zinc-500 text-center block w-full hover:text-zinc-300"
-                            >
-                              تصحیح {loginMethod === 'email' ? 'آدرس ایمیل' : 'شماره تلفن'}
-                            </button>
-                          </div>
-                        )}
+                      <div className="flex gap-3">
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            setAuthTab('login');
+                            setIsLoginModalOpen(true);
+                          }}
+                          className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-3 font-bold text-center text-xs transition-colors cursor-pointer"
+                        >
+                          ورود به حساب کاربری
+                        </button>
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            setAuthTab('register');
+                            setIsLoginModalOpen(true);
+                          }}
+                          className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-xl py-3 font-bold text-center text-xs transition-colors cursor-pointer"
+                        >
+                          ثبت نام و عضویت
+                        </button>
                       </div>
                     </div>
                   ) : (
@@ -1459,9 +1667,32 @@ export default function Home() {
                   href={siteConfig.socialWhatsapp} 
                   target="_blank" 
                   rel="noreferrer"
-                  className="w-9 h-9 rounded-xl bg-zinc-200/55 dark:bg-zinc-900 hover:bg-emerald-655/10 hover:text-emerald-400 border border-zinc-300 dark:border-zinc-800 flex items-center justify-center transition-all shadow-inner"
+                  title="واتساپ پشتیبانی"
+                  className="w-9 h-9 rounded-xl bg-zinc-200/55 dark:bg-zinc-900 hover:bg-emerald-600/10 hover:text-emerald-400 border border-zinc-300 dark:border-zinc-800 flex items-center justify-center transition-all shadow-inner"
                 >
                   <MessagesSquare className="w-4 h-4 text-emerald-400" />
+                </a>
+              )}
+              {siteConfig.socialBale && (
+                <a 
+                  href={siteConfig.socialBale} 
+                  target="_blank" 
+                  rel="noreferrer"
+                  title="پیام‌رسان بله"
+                  className="w-9 h-9 rounded-xl bg-zinc-200/55 dark:bg-zinc-900 hover:bg-green-600/10 hover:text-green-400 border border-zinc-300 dark:border-zinc-800 flex items-center justify-center transition-all shadow-inner"
+                >
+                  <MessagesSquare className="w-4 h-4 text-green-400" />
+                </a>
+              )}
+              {siteConfig.socialX && (
+                <a 
+                  href={siteConfig.socialX} 
+                  target="_blank" 
+                  rel="noreferrer"
+                  title="صفحه X (توئیتر)"
+                  className="w-9 h-9 rounded-xl bg-zinc-200/55 dark:bg-zinc-900 hover:bg-zinc-600/10 hover:text-zinc-400 border border-zinc-300 dark:border-zinc-800 flex items-center justify-center transition-all shadow-inner"
+                >
+                  <Twitter className="w-4 h-4 text-zinc-400" />
                 </a>
               )}
             </div>

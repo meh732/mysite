@@ -9,13 +9,17 @@ export default function App() {
     // Bootstrap user's theme choice instantly on mount
     const saved = localStorage.getItem('theme');
     const root = document.documentElement;
-    root.classList.remove('light');
+    root.classList.remove('light', 'dark');
     
     if (saved === 'light') {
       root.classList.add('light');
+    } else if (saved === 'dark') {
+      root.classList.add('dark');
     } else if (saved === 'system' || !saved) {
       const systemIsDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      if (!systemIsDark) {
+      if (systemIsDark) {
+        root.classList.add('dark');
+      } else {
         root.classList.add('light');
       }
     }

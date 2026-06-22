@@ -12,15 +12,17 @@ export default function ThemeSwitcher() {
 
   const applyTheme = (mode: 'light' | 'dark' | 'system') => {
     const root = document.documentElement;
-    root.classList.remove('light');
+    root.classList.remove('light', 'dark');
     
     if (mode === 'light') {
       root.classList.add('light');
     } else if (mode === 'dark') {
-      root.classList.remove('light');
+      root.classList.add('dark');
     } else if (mode === 'system') {
       const systemIsDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      if (!systemIsDark) {
+      if (systemIsDark) {
+        root.classList.add('dark');
+      } else {
         root.classList.add('light');
       }
     }
