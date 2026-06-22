@@ -569,8 +569,7 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
     );
     return;
 } // admin mode ends
-  }
-
+  
   // --- REGULAR USER / CUSTOMER FLOWS WITH ACTIVE STORE MENU ---
 
   // Helper check: Is this chat registered with a phone number?
@@ -753,7 +752,7 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
     ];
 
     if (settings.adminTelegramChatId && settings.telegramToken) {
-      botRequest('https://api.telegram.org', settings.telegramToken, 'sendPhoto', { 
+      await botRequest('https://api.telegram.org', settings.telegramToken, 'sendPhoto', { 
         chat_id: settings.adminTelegramChatId, 
         photo: fileId,
         caption: adminMsg,
@@ -762,7 +761,7 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
       });
     }
     if (settings.adminBaleChatId && settings.baleToken) {
-      botRequest('https://tapi.bale.ai', settings.baleToken, 'sendPhoto', { 
+      await botRequest('https://tapi.bale.ai', settings.baleToken, 'sendPhoto', { 
         chat_id: settings.adminBaleChatId, 
         photo: fileId, 
         caption: adminMsg,
@@ -803,10 +802,10 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
     
     const adminMsg = `💸 **رسید متنی جدید جهت تایید کارت به کارت!**\n\n👤 فرستنده (تلفن): ${userMap.phone}\n💰 مبلغ: ${amountVal.toLocaleString('fa-IR')} تومان\n💳 واریزکننده: ${namePart}\n🆔 شناسه: #${newTrans.id}\n\nوارد پنل مدیریت شده و پس از اعتبارسنجی تایید نمایید.`;
     if (settings.adminTelegramChatId && settings.telegramToken) {
-      botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', { chat_id: settings.adminTelegramChatId, text: adminMsg });
+      await botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', { chat_id: settings.adminTelegramChatId, text: adminMsg });
     }
     if (settings.adminBaleChatId && settings.baleToken) {
-      botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', { chat_id: settings.adminBaleChatId, text: adminMsg });
+      await botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', { chat_id: settings.adminBaleChatId, text: adminMsg });
     }
     return;
   }
@@ -983,8 +982,8 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
     const botUser = botUsers.find(b => b.phone === trans.userIdentifier);
     if (botUser) {
       const userMsg = `✅ **تایید افزایش اعتبار!**\n\nمبلغ **${trans.amount.toLocaleString('fa-IR')} تومان** با موفقیت توسط مدیریت تایید و به کیف پول شما واریز شد.\n\n💳 موجودی جدید شما: **${user?.walletBalance.toLocaleString('fa-IR')} تومان**`;
-      if (botUser.telegramChatId) botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', { chat_id: botUser.telegramChatId, text: userMsg });
-      if (botUser.baleChatId) botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', { chat_id: botUser.baleChatId, text: userMsg });
+      if (botUser.telegramChatId) await botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', { chat_id: botUser.telegramChatId, text: userMsg });
+      if (botUser.baleChatId) await botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', { chat_id: botUser.baleChatId, text: userMsg });
     }
     return;
   }
@@ -1009,8 +1008,8 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
     const botUser = botUsers.find(b => b.phone === trans.userIdentifier);
     if (botUser) {
       const userMsg = `❌ **رد درخواست افزایش اعتبار**\n\nدرخواست شارژ حساب شما به مبلغ **${trans.amount.toLocaleString('fa-IR')} تومان** توسط مدیریت رد شد. در صورت هرگونه سوال با پشتیبانی در ارتباط باشید.`;
-      if (botUser.telegramChatId) botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', { chat_id: botUser.telegramChatId, text: userMsg });
-      if (botUser.baleChatId) botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', { chat_id: botUser.baleChatId, text: userMsg });
+      if (botUser.telegramChatId) await botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', { chat_id: botUser.telegramChatId, text: userMsg });
+      if (botUser.baleChatId) await botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', { chat_id: botUser.baleChatId, text: userMsg });
     }
     return;
   }
@@ -1084,7 +1083,7 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
         // Ask for details AFTER purchase
         userCheckoutStates[chat.id] = { orderId: newOrder.id };
         
-        await reply(
+        reply(
           `🎉 **خرید شما با موفقیت تکمیل شد!**\n\n` +
           `✅ مبلغ **${priceStr}** از کیف پول دیجیتال کسر شد.\n` +
           `💳 مانده حساب جدید شما: **${userObj?.walletBalance.toLocaleString('fa-IR')} تومان**\n` +
@@ -1126,7 +1125,7 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
           { text: `🛍️ ${v.duration} (${v.price.toLocaleString('fa-IR')} تومان)`, callback_data: `buyvar_${prod.id}_${v.id}` }
         ]);
         
-        await reply(
+        reply(
           `🛒 **محصول "${prod.title}" دارای تعرفه‌ها و مدت‌زمان‌های متفاوت است:**\n\n` +
           `لطفاً پکیج فرعی مدنظر خود را از طریق دکمه‌های زیر انتخاب نمائید:`,
           { inline_keyboard }
@@ -1146,7 +1145,7 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
           [{ text: `💳 شارژ آنلاین (${missingAmount.toLocaleString('fa-IR')})`, callback_data: `topuponline_${missingAmount}` }],
           [{ text: `🏦 رویت اطلاعات کارت به کارت`, callback_data: `topupcard_${missingAmount}` }]
         ];
-        await reply(
+        reply(
           `❌ **موجودی کیف پول برای این خرید کافی نیست!** ❌\n\n` +
           `📦 فاکتور انتخابی: **${prod.title}**\n` +
           `💰 مبلغ فاکتور: **${priceStr}**\n` +
@@ -1190,7 +1189,7 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
       // Ask for details AFTER purchase
       userCheckoutStates[chat.id] = { orderId: newOrder.id };
       
-      await reply(
+      reply(
         `🎉 **خرید شما با موفقیت تکمیل شد!**\n\n` +
         `✅ مبلغ **${priceStr}** از کیف پول دیجیتال کسر شد.\n` +
         `💳 مانده حساب جدید شما: **${userObj?.walletBalance.toLocaleString('fa-IR')} تومان**\n` +
@@ -1222,23 +1221,7 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
   }
   chatObj.messages.push({ sender: 'user', text });
   saveDatabase();
-
-  await reply(
-    `📩 پیام شما با موفقیت ثبت و به بخش تیکت‌های پشتیبانی فرستاده شد. کارشناسان ما به زودی پاسخ خود را ارسال می‌کنند.`,
-    getUserKeyboard(isAdmin)
-  );
-
-  // Notify admins
-  const adminSyncMsg = `💬 **پیام پشتیبانی جدید از کاربر (${userMap.phone}):**\n\n"${text}"`;
-  if (settings.adminTelegramChatId && settings.telegramToken) {
-    botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', { chat_id: settings.adminTelegramChatId, text: adminSyncMsg });
-  }
-  if (settings.adminBaleChatId && settings.baleToken) {
-    botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', { chat_id: settings.adminBaleChatId, text: adminSyncMsg });
-  }
-// Start active background loops
-pollTelegram();
-pollBale();
+}
 
 async function startServer() {
   const app = express();
