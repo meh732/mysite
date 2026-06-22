@@ -334,6 +334,7 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
   const adminKeyboard = {
     keyboard: [
       [{ text: "📊 وضعیت سیستم" }, { text: "💾 دانلود بکاپ کلی" }],
+      [{ text: "📦 مدیریت سفارشات" }, { text: "🛍️ مدیریت محصولات" }],
       [{ text: "🔐 فعال/غیرفعال‌سازی لاگین موبایل" }, { text: "👤 سوییچ به پنل کاربری" }]
     ],
     resize_keyboard: true
@@ -471,6 +472,21 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
         `👤 با موفقیت به نمای کاربری سوییچ کردید.\n\nاکنون می‌توانید منوی سفارشات، فاکتورهای فروشگاه و دریافت کدهای تایید را عینا مشابه خریداران تست نمایید.`,
         getUserKeyboard(true)
       );
+      return;
+    }
+
+    if (text === "📦 مدیریت سفارشات") {
+      const pendingOrders = orders.filter(o => o.status === 'pending');
+      if (pendingOrders.length === 0) {
+        await reply("✅ هیچ سفارش در انتظار بررسی وجود ندارد.", adminKeyboard);
+      } else {
+        await reply(`📦 تعداد ${pendingOrders.length} سفارش در انتظار بررسی است.\n(برای مدیریت به پنل وب مراجعه فرمایید، قابلیت تعاملی کامل به زودی اضافه می‌شود.)`, adminKeyboard);
+      }
+      return;
+    }
+
+    if (text === "🛍️ مدیریت محصولات") {
+      await reply(`🛍️ لیست محصولات فعال:\n${products.map(p => `- ${p.title} (${p.active !== false ? '✅ فعال' : '❌ غیرفعال'})`).join('\n')}\n\n(برای تغییر وضعیت یا ویرایش به پنل وب مراجعه نمایید.)`, adminKeyboard);
       return;
     }
 
@@ -730,24 +746,15 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
     const walletText = 
       `💳 **بخش مدیریت مالی و کیف پول شما** 💳\n\n` +
       `👤 حساب کاربری: **${userMap.phone}**\n` +
-      `💰 موجودی فعلی فاکتور: **${balance.toLocaleString('fa-IR')} تومان**\n\n` +
-      `------------------------------------\n` +
-      `✨ **روش‌های شارژ آسان کیف پول**: ✨\n\n` +
-      `۱. **شارژ مستقیم و آنی (لینک آنلاین)**:\n` +
-      `در صورت تمایل به پرداخت آنلاین شتاب و شارژ فوری، روی لینک پرداخت مستقیم زیر ضربه بزنید:\n` +
-      `${settings.onlinePaymentUrl || 'فعلاً آدرسی تعریف نشده است'}\n\n` +
-      `۲. **کارت به کارت دستی (و ارسال رسید)**:\n` +
-      `می‌توانید مبلغ مورد نظر را به مشخصات کارت زیر واریز نمایید:\n` +
-      `💳 شماره کارت ۱۶ رقمی:\n` +
-      `\`${settings.cardNo || 'مشخص نشده'}\`\n` +
-      `🏦 بانک صادرکننده: *${settings.cardBank || 'مشخص نشده'}*\n` +
-      `👤 به نام: **${settings.cardHolder || 'مشخص نشده'}**\n\n` +
-      `📥 **چگونه رسید را ثبت کنم؟**\n` +
-      `پس از واریز کارت به کارت، خیلی راحت فیش یا تصویر فیش بانکی خود را **همین جا آپلود کنید** یا اطلاعات را به فرمت زیر برای ربات تایپ و ارسال نمایید:\n` +
-      `«رسید [مبلغ به تومان] [نام واریز کننده]»\n` +
-      `مثال: رسید ۵۰۰۰۰۰ محمد علوی`;
-      
-    await reply(walletText, getUserKeyboard(isAdmin));
+      `💰 موجودی فعلی: **${balance.toLocaleString('fa-IR')} تومان**\n\n` +
+      `💡 جهت شارژ کیف پول، روش مورد نظر خود را انتخاب نمایید:`;
+
+    const topupButtons = [
+      [{ text: `💳 شارژ آنلاین (درگاه)`, callback_data: `start_topup_online` }],
+      [{ text: `🏦 شارژ کارت به کارت`, callback_data: `start_topup_card` }]
+    ];
+    
+    await reply(walletText, { inline_keyboard: topupButtons });
     return;
   }
 
@@ -776,31 +783,76 @@ async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
   }
 
   // Check 5: Active Details Collection Sequence
-  if (userCheckoutStates[chat.id] && userCheckoutStates[chat.id].orderId) {
-    const orderId = userCheckoutStates[chat.id].orderId;
-    
-    if (text === 'لغو' || text === 'انصراف' || text === 'منصرف شدم') {
-      delete userCheckoutStates[chat.id];
-      await reply("❌ ثبت جزئیات متوقف شد. فاکتور شما ثبت شده است و بدون توضیحات باقی ماند. به منوی اصلی بازگشتیم.", getUserKeyboard(isAdmin));
-      return;
+  if (userCheckoutStates[chat.id]) {
+    const state = userCheckoutStates[chat.id];
+
+    // Handle Amount Input for Topup
+    if (state.pendingTopupType) {
+        const amount = parseInt(text.replace(/[^0-9]/g, ''), 10);
+        if (isNaN(amount) || amount <= 0) {
+            await reply("❌ مبلغ وارد شده نامعتبر است. لطفاً مبلغ را به صورت عدد به تومان وارد کنید:");
+            return;
+        }
+
+        if (state.pendingTopupType === 'online') {
+            await reply(
+                `💳 **شارژ آنلاین**\n\n` +
+                `مبلغ: ${amount.toLocaleString('fa-IR')} تومان\n` +
+                `جهت انجام پرداخت، به درگاه بانکی زیر مراجعه کنید:\n` +
+                `${settings.onlinePaymentUrl || 'آدرس پرداخت تعریف نشده'}\n\n` +
+                `پس از پرداخت موفقیت‌آمیز، در صورت تنظیم درگاه، حساب شما اتومات شارژ می‌شود.`
+            );
+            const simulationButtons = [
+                [{ text: `✅ [شبیه‌ساز] پرداخت موفق`, callback_data: `topuponline_${amount}` }]
+            ];
+            await reply("یا برای شبیه‌سازی تایید پرداخت:", { inline_keyboard: simulationButtons });
+        } else {
+            await reply(
+                `🏦 **شارژ کارت به کارت**\n\n` +
+                `مبلغ: ${amount.toLocaleString('fa-IR')} تومان\n` +
+                `لطفاً به کارت زیر واریز کنید:\n` +
+                `${settings.cardNo || 'شماره کارت تعریف نشده'}\n\n` +
+                `پس از واریز، تصویر رسید را ارسال کنید تا ادمین تایید کند.`
+            );
+            state.pendingTopupAmount = amount;
+        }
+        return;
     }
 
-    const orderIndex = orders.findIndex(o => o.id === orderId);
-    if (orderIndex !== -1) {
-      orders[orderIndex].additionalDetails = (orders[orderIndex].additionalDetails || '') + ` | توضیحات خریدار: ${text}`;
-      saveDatabase();
+    if (state.orderId) {
+        const orderId = state.orderId;
+        
+        if (text === 'لغو' || text === 'انصراف' || text === 'منصرف شدم') {
+        delete userCheckoutStates[chat.id];
+        await reply("❌ ثبت جزئیات متوقف شد. فاکتور شما ثبت شده است و بدون توضیحات باقی ماند. به منوی اصلی بازگشتیم.", getUserKeyboard(isAdmin));
+        return;
+        }
+
+        const orderIndex = orders.findIndex(o => o.id === orderId);
+        if (orderIndex !== -1) {
+        orders[orderIndex].additionalDetails = (orders[orderIndex].additionalDetails || '') + ` | توضیحات خریدار: ${text}`;
+        saveDatabase();
+        }
+        delete userCheckoutStates[chat.id];
+        
+        await reply(
+        `✅ **توضیحات شما برای سفارش #${orderId} با موفقیت ثبت شد.**\n\n` +
+        `سفارش شما در اسرع وقت انجام خواهد شد. ممنون از اعتماد شما!`,
+        getUserKeyboard(isAdmin)
+        );
+        return;
     }
-    delete userCheckoutStates[chat.id];
-    
-    await reply(
-      `✅ **توضیحات شما برای سفارش #${orderId} با موفقیت ثبت شد.**\n\n` +
-      `سفارش شما در اسرع وقت انجام خواهد شد. ممنون از اعتماد شما!`,
-      getUserKeyboard(isAdmin)
-    );
-    return;
   }
 
-  // Check: Topup action from inline keyboard
+  // --- Start Topup Flows ---
+  if (text === 'start_topup_online' || text === 'start_topup_card') {
+    const type = text === 'start_topup_online' ? 'online' : 'card';
+    userCheckoutStates[chat.id] = { pendingTopupType: type };
+    await reply(`لطفاً مبلغ مورد نظر خود را به تومان وارد کنید:`);
+    return;
+  }
+  
+  // Check: Topup action from inline keyboard (Callback queries for finalize)
   if (text.startsWith('topuponline_')) {
     const amount = parseInt(text.split('_')[1], 10);
     const userObj = users.find(u => u.phone === userMap.phone);
