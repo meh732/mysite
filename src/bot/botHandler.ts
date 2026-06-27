@@ -2,7 +2,7 @@ import {
   settings, products, orders, users, transactions, botUsers, chats, saveDatabase, 
   adminModeOverride, userCheckoutStates, otps, formatPriceToman, parsePrice 
 } from '../db/db';
-import { botRequest, isUserMemberOfChannel, sendBotDocument, sendBotPhotoBase64 } from './botService';
+import { botRequest, isUserMemberOfChannel, sendBotDocument, sendBotPhotoBase64, escapeHtml } from './botService';
 
 export async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
   let isCallback = false;
@@ -507,10 +507,15 @@ export async function handleBotUpdate(platform: 'telegram' | 'bale', update: any
       getUserKeyboard(isAdmin)
     );
     
-    const adminMsg = `📸 **رسید بانکی تصویری جدید از بات ${platformName}!**\n\n` +
-      `👤 فرستنده (تلفن): ${userMap.phone}\n` +
-      `💰 مبلغ درخواستی: ${reqAmount > 0 ? reqAmount.toLocaleString('fa-IR') + ' تومان' : 'نامشخص'}\n` +
-      `🆔 شناسه تراکنش: #${newTrans.id}\n\n` +
+    const safePlatformName = escapeHtml(platformName);
+    const safePhone = escapeHtml(userMap.phone);
+    const safeAmount = reqAmount > 0 ? reqAmount.toLocaleString('fa-IR') + ' تومان' : 'نامشخص';
+    const safeTransId = String(newTrans.id);
+
+    const adminMsgHtml = `📸 <b>رسید بانکی تصویری جدید از بات ${safePlatformName}!</b>\n\n` +
+      `👤 <b>فرستنده (تلفن):</b> ${safePhone}\n` +
+      `💰 <b>مبلغ درخواستی:</b> ${safeAmount}\n` +
+      `🆔 <b>شناسه تراکنش:</b> #${safeTransId}\n\n` +
       `جهت بررسی و تایید/رد تراکنش می‌توانید از دکمه‌های زیر استفاده کنید یا به پنل وب‌سایت مراجعه نمایید.`;
     
     const adminInlineKeyboard = [
@@ -530,8 +535,8 @@ export async function handleBotUpdate(platform: 'telegram' | 'bale', update: any
           const res = await botRequest('https://api.telegram.org', settings.telegramToken, 'sendPhoto', { 
             chat_id: settings.adminTelegramChatId, 
             photo: fileId,
-            caption: adminMsg,
-            parse_mode: 'Markdown',
+            caption: adminMsgHtml,
+            parse_mode: 'HTML',
             reply_markup: { inline_keyboard: adminInlineKeyboard } 
           });
           if (res && res.ok) sent = true;
@@ -546,8 +551,8 @@ export async function handleBotUpdate(platform: 'telegram' | 'bale', update: any
           const res = await botRequest('https://api.telegram.org', settings.telegramToken, 'sendPhoto', { 
             chat_id: settings.adminTelegramChatId, 
             photo: photoUrl,
-            caption: adminMsg,
-            parse_mode: 'Markdown',
+            caption: adminMsgHtml,
+            parse_mode: 'HTML',
             reply_markup: { inline_keyboard: adminInlineKeyboard } 
           });
           if (res && res.ok) sent = true;
@@ -563,7 +568,7 @@ export async function handleBotUpdate(platform: 'telegram' | 'bale', update: any
           if (imgRes.ok) {
             const arrBuffer = await imgRes.arrayBuffer();
             const base64Data = `data:image/jpeg;base64,${Buffer.from(arrBuffer).toString('base64')}`;
-            const res = await sendBotPhotoBase64('https://api.telegram.org', settings.telegramToken, settings.adminTelegramChatId, adminMsg, base64Data, adminInlineKeyboard);
+            const res = await sendBotPhotoBase64('https://api.telegram.org', settings.telegramToken, settings.adminTelegramChatId, adminMsgHtml, base64Data, adminInlineKeyboard, 'HTML');
             if (res && res.ok) sent = true;
           }
         } catch (e) {
@@ -574,11 +579,11 @@ export async function handleBotUpdate(platform: 'telegram' | 'bale', update: any
       // Stage 4: Ultimate text fallback with link & buttons
       if (!sent) {
         try {
-          const textMsg = adminMsg + (photoUrl ? `\n\n🔗 [مشاهده تصویر فیش واریزی](${photoUrl})` : '');
+          const textMsg = adminMsgHtml + (photoUrl ? `\n\n🔗 <a href="${photoUrl}">مشاهده تصویر فیش واریزی</a>` : '');
           await botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', { 
             chat_id: settings.adminTelegramChatId, 
             text: textMsg,
-            parse_mode: 'Markdown',
+            parse_mode: 'HTML',
             reply_markup: { inline_keyboard: adminInlineKeyboard } 
           });
         } catch (e) {
@@ -597,7 +602,8 @@ export async function handleBotUpdate(platform: 'telegram' | 'bale', update: any
           const res = await botRequest('https://tapi.bale.ai', settings.baleToken, 'sendPhoto', { 
             chat_id: settings.adminBaleChatId, 
             photo: fileId,
-            caption: adminMsg,
+            caption: adminMsgHtml,
+            parse_mode: 'HTML',
             reply_markup: { inline_keyboard: adminInlineKeyboard } 
           });
           if (res && res.ok) sent = true;
@@ -612,7 +618,8 @@ export async function handleBotUpdate(platform: 'telegram' | 'bale', update: any
           const res = await botRequest('https://tapi.bale.ai', settings.baleToken, 'sendPhoto', { 
             chat_id: settings.adminBaleChatId, 
             photo: photoUrl,
-            caption: adminMsg,
+            caption: adminMsgHtml,
+            parse_mode: 'HTML',
             reply_markup: { inline_keyboard: adminInlineKeyboard } 
           });
           if (res && res.ok) sent = true;
@@ -628,7 +635,7 @@ export async function handleBotUpdate(platform: 'telegram' | 'bale', update: any
           if (imgRes.ok) {
             const arrBuffer = await imgRes.arrayBuffer();
             const base64Data = `data:image/jpeg;base64,${Buffer.from(arrBuffer).toString('base64')}`;
-            const res = await sendBotPhotoBase64('https://tapi.bale.ai', settings.baleToken, settings.adminBaleChatId, adminMsg, base64Data, adminInlineKeyboard);
+            const res = await sendBotPhotoBase64('https://tapi.bale.ai', settings.baleToken, settings.adminBaleChatId, adminMsgHtml, base64Data, adminInlineKeyboard, 'HTML');
             if (res && res.ok) sent = true;
           }
         } catch (e) {
@@ -639,10 +646,11 @@ export async function handleBotUpdate(platform: 'telegram' | 'bale', update: any
       // Stage 4: Ultimate text fallback with link & buttons
       if (!sent) {
         try {
-          const textMsg = adminMsg + (photoUrl ? `\n\n🔗 [مشاهده تصویر فیش واریزی](${photoUrl})` : '');
+          const textMsg = adminMsgHtml + (photoUrl ? `\n\n🔗 <a href="${photoUrl}">مشاهده تصویر فیش واریزی</a>` : '');
           await botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', { 
             chat_id: settings.adminBaleChatId, 
             text: textMsg,
+            parse_mode: 'HTML',
             reply_markup: { inline_keyboard: adminInlineKeyboard } 
           });
         } catch (e) {

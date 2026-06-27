@@ -9,7 +9,7 @@ import {
   groups, subGroups, products, orders, users, chats, settings, botUsers, tickets, transactions,
   loadDatabase, saveDatabase, formatPriceToman, parsePrice, otps
 } from './src/db/db';
-import { botRequest, sendBotPhotoBase64 } from './src/bot/botService';
+import { botRequest, sendBotPhotoBase64, escapeHtml } from './src/bot/botService';
 import { pollTelegram, pollBale } from './src/bot/botPolling';
 
 async function startServer() {
@@ -232,7 +232,15 @@ async function startServer() {
 
     // If card payment (not online) and receiptImage is uploaded, notify the admin in the bot!
     if (!isOnline && receiptImage) {
-      const adminMsg = `📸 **رسید بانکی تصویری جدید از وب‌سایت!**\n\n👤 فرستنده (تلفن/ایمیل): ${userIdentifier}\n💰 مبلغ درخواستی: ${amt.toLocaleString('fa-IR')} تومان\n🆔 شناسه تراکنش: #${newTransaction.id}\n\nجهت بررسی و تایید/رد تراکنش می‌توانید از دکمه‌های زیر استفاده کنید یا به پنل وب‌سایت مراجعه نمایید.`;
+      const safeIdentifier = escapeHtml(userIdentifier);
+      const safeAmount = amt.toLocaleString('fa-IR');
+      const safeTransId = String(newTransaction.id);
+
+      const adminMsgHtml = `📸 <b>رسید بانکی تصویری جدید از وب‌سایت!</b>\n\n` +
+        `👤 <b>فرستنده (تلفن/ایمیل):</b> ${safeIdentifier}\n` +
+        `💰 <b>مبلغ درخواستی:</b> ${safeAmount} تومان\n` +
+        `🆔 <b>شناسه تراکنش:</b> #${safeTransId}\n\n` +
+        `جهت بررسی و تایید/رد تراکنش می‌توانید از دکمه‌های زیر استفاده کنید یا به پنل وب‌سایت مراجعه نمایید.`;
       
       const adminInlineKeyboard = [
         [
@@ -241,13 +249,74 @@ async function startServer() {
         ]
       ];
 
+      // Send to Telegram Admin
       if (settings.adminTelegramChatId && settings.telegramToken) {
-        sendBotPhotoBase64('https://api.telegram.org', settings.telegramToken, settings.adminTelegramChatId, adminMsg, receiptImage, adminInlineKeyboard)
-          .catch(err => console.error('Error sending receipt to Telegram admin:', err));
+        (async () => {
+          let sent = false;
+          try {
+            const res = await sendBotPhotoBase64(
+              'https://api.telegram.org', 
+              settings.telegramToken, 
+              settings.adminTelegramChatId, 
+              adminMsgHtml, 
+              receiptImage, 
+              adminInlineKeyboard,
+              'HTML'
+            );
+            if (res && res.ok) sent = true;
+          } catch (e) {
+            console.error('Error sending receipt photo to Telegram admin:', e);
+          }
+
+          if (!sent) {
+            // Text fallback
+            try {
+              await botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', {
+                chat_id: settings.adminTelegramChatId,
+                text: adminMsgHtml + '\n\n⚠️ <i>خطا در ارسال تصویر فیش؛ لطفاً تصویر را در پنل وب‌سایت مشاهده کنید.</i>',
+                parse_mode: 'HTML',
+                reply_markup: { inline_keyboard: adminInlineKeyboard }
+              });
+            } catch (e) {
+              console.error('Error sending fallback receipt text to Telegram admin:', e);
+            }
+          }
+        })().catch(err => console.error(err));
       }
+
+      // Send to Bale Admin
       if (settings.adminBaleChatId && settings.baleToken) {
-        sendBotPhotoBase64('https://tapi.bale.ai', settings.baleToken, settings.adminBaleChatId, adminMsg, receiptImage, adminInlineKeyboard)
-          .catch(err => console.error('Error sending receipt to Bale admin:', err));
+        (async () => {
+          let sent = false;
+          try {
+            const res = await sendBotPhotoBase64(
+              'https://tapi.bale.ai', 
+              settings.baleToken, 
+              settings.adminBaleChatId, 
+              adminMsgHtml, 
+              receiptImage, 
+              adminInlineKeyboard,
+              'HTML'
+            );
+            if (res && res.ok) sent = true;
+          } catch (e) {
+            console.error('Error sending receipt photo to Bale admin:', e);
+          }
+
+          if (!sent) {
+            // Text fallback
+            try {
+              await botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', {
+                chat_id: settings.adminBaleChatId,
+                text: adminMsgHtml + '\n\n⚠️ <i>خطا در ارسال تصویر فیش؛ لطفاً تصویر را در پنل وب‌سایت مشاهده کنید.</i>',
+                parse_mode: 'HTML',
+                reply_markup: { inline_keyboard: adminInlineKeyboard }
+              });
+            } catch (e) {
+              console.error('Error sending fallback receipt text to Bale admin:', e);
+            }
+          }
+        })().catch(err => console.error(err));
       }
     }
 

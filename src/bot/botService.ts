@@ -45,7 +45,15 @@ export async function sendBotDocument(apiHost: string, token: string, chatId: nu
   }
 }
 
-export async function sendBotPhotoBase64(apiHost: string, token: string, chatId: string | number, caption: string, base64Data: string, inlineKeyboard?: any) {
+export function escapeHtml(str: any): string {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+export async function sendBotPhotoBase64(apiHost: string, token: string, chatId: string | number, caption: string, base64Data: string, inlineKeyboard?: any, parseMode: string = 'Markdown') {
   try {
     const matches = base64Data.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
     if (!matches || matches.length !== 3) return null;
@@ -55,7 +63,7 @@ export async function sendBotPhotoBase64(apiHost: string, token: string, chatId:
     const formData = new FormData();
     formData.append('chat_id', String(chatId));
     formData.append('caption', caption);
-    formData.append('parse_mode', 'Markdown');
+    formData.append('parse_mode', parseMode);
     if (inlineKeyboard) {
       formData.append('reply_markup', JSON.stringify({ inline_keyboard: inlineKeyboard }));
     }
