@@ -5,11 +5,31 @@ import { handleBotUpdate } from './botHandler';
 let telegramOffset = 0;
 let baleOffset = 0;
 
+let isTelegramCommandsSet = false;
+let isBaleCommandsSet = false;
+
+const botCommands = {
+  commands: [
+    { command: 'start', description: 'شروع و منوی اصلی' },
+    { command: 'shop', description: 'لیست محصولات و خدمات' },
+    { command: 'wallet', description: 'موجودی و شارژ حساب' },
+    { command: 'orders', description: 'پیگیری سفارشات من' },
+    { command: 'otp', description: 'دریافت کد ورود سایت' },
+    { command: 'support', description: 'ارتباط با پشتیبانی' }
+  ]
+};
+
 export async function pollTelegram() {
   if (!settings.telegramToken) {
     setTimeout(pollTelegram, 4000);
     return;
   }
+  
+  if (!isTelegramCommandsSet) {
+    isTelegramCommandsSet = true;
+    botRequest('https://api.telegram.org', settings.telegramToken, 'setMyCommands', botCommands).catch(() => {});
+  }
+
   try {
     const res: any = await botRequest(
       'https://api.telegram.org',
@@ -33,6 +53,12 @@ export async function pollBale() {
     setTimeout(pollBale, 4000);
     return;
   }
+
+  if (!isBaleCommandsSet) {
+    isBaleCommandsSet = true;
+    botRequest('https://tapi.bale.ai', settings.baleToken, 'setMyCommands', botCommands).catch(() => {});
+  }
+
   try {
     const res: any = await botRequest(
       'https://tapi.bale.ai',

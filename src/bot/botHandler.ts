@@ -467,21 +467,19 @@ export async function handleBotUpdate(platform: 'telegram' | 'bale', update: any
   }
 
   // --- Photo/Document Photo Receipt Checking ---
-  const isImageMime = message.document?.mime_type?.startsWith('image/');
-  const isPdfMime = message.document?.mime_type === 'application/pdf';
-  // Allow photo, image document, PDF document, or any document if we are specifically waiting for a receipt
   const isWaitingForReceipt = userCheckoutStates[chat.id] && userCheckoutStates[chat.id].pendingTopupAmount;
-  
-  const photo = message.photo || 
-    (message.document && (isImageMime || isPdfMime || isWaitingForReceipt) ? [message.document] : null);
-  
-  if (photo && photo.length > 0) {
-    const fileId = message.photo ? photo[photo.length - 1].file_id : message.document.file_id;
-    let reqAmount = 0;
-    if (userCheckoutStates[chat.id] && userCheckoutStates[chat.id].pendingTopupAmount) {
-      reqAmount = userCheckoutStates[chat.id].pendingTopupAmount;
+
+  if (isWaitingForReceipt && (message.photo || message.document)) {
+    const isImageMime = message.document?.mime_type?.startsWith('image/');
+    const isPdfMime = message.document?.mime_type === 'application/pdf';
+    
+    const photo = message.photo || 
+      (message.document && (isImageMime || isPdfMime || isWaitingForReceipt) ? [message.document] : null);
+    
+    if (photo && photo.length > 0) {
+      const fileId = message.photo ? photo[photo.length - 1].file_id : message.document.file_id;
+      let reqAmount = userCheckoutStates[chat.id].pendingTopupAmount;
       delete userCheckoutStates[chat.id].pendingTopupAmount;
-    }
 
     // Resolve file URL path for either Telegram or Bale
     let fileUrlPath = '';
@@ -780,9 +778,9 @@ export async function handleBotUpdate(platform: 'telegram' | 'bale', update: any
         }
       }
     }
-
     return;
   }
+}
 
   // --- Start Topup Flow ---
   if (text === '💰 موجودی و شارژ حساب' || text === '/wallet') {
