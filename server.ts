@@ -9,14 +9,15 @@ import {
   groups, subGroups, products, orders, users, chats, settings, botUsers, tickets, transactions,
   loadDatabase, saveDatabase, formatPriceToman, parsePrice, otps
 } from './src/db/db';
-import { botRequest, sendBotPhotoBase64, escapeHtml } from './src/bot/botService';
+import { botRequest, sendBotPhotoBase64, escapeHtml, stripHtml } from './src/bot/botService';
 import { pollTelegram, pollBale } from './src/bot/botPolling';
 
 async function startServer() {
   const app = express();
   const PORT = parseInt(process.env.APP_PORT || process.env.PORT || '3000', 10);
 
-  app.use(express.json());
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
   // Load database on start
   loadDatabase();
@@ -253,6 +254,7 @@ async function startServer() {
       if (settings.adminTelegramChatId && settings.telegramToken) {
         (async () => {
           let sent = false;
+          // Try Stage 1: Send photo with HTML caption
           try {
             const res = await sendBotPhotoBase64(
               'https://api.telegram.org', 
@@ -265,20 +267,52 @@ async function startServer() {
             );
             if (res && res.ok) sent = true;
           } catch (e) {
-            console.error('Error sending receipt photo to Telegram admin:', e);
+            console.error('Error sending receipt photo to Telegram admin (HTML):', e);
           }
 
+          // Try Stage 2: Send photo with Plain Text caption
           if (!sent) {
-            // Text fallback
             try {
-              await botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', {
+              const res = await sendBotPhotoBase64(
+                'https://api.telegram.org', 
+                settings.telegramToken, 
+                settings.adminTelegramChatId, 
+                stripHtml(adminMsgHtml), 
+                receiptImage, 
+                adminInlineKeyboard,
+                undefined
+              );
+              if (res && res.ok) sent = true;
+            } catch (e) {
+              console.error('Error sending receipt photo to Telegram admin (Plain Text):', e);
+            }
+          }
+
+          // Try Stage 3: Send HTML message
+          if (!sent) {
+            try {
+              const res = await botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', {
                 chat_id: settings.adminTelegramChatId,
                 text: adminMsgHtml + '\n\n⚠️ <i>خطا در ارسال تصویر فیش؛ لطفاً تصویر را در پنل وب‌سایت مشاهده کنید.</i>',
                 parse_mode: 'HTML',
                 reply_markup: { inline_keyboard: adminInlineKeyboard }
               });
+              if (res && res.ok) sent = true;
             } catch (e) {
-              console.error('Error sending fallback receipt text to Telegram admin:', e);
+              console.error('Error sending fallback receipt text to Telegram admin (HTML):', e);
+            }
+          }
+
+          // Try Stage 4: Send Plain Text message (Guaranteed to work)
+          if (!sent) {
+            try {
+              await botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', {
+                chat_id: settings.adminTelegramChatId,
+                text: stripHtml(adminMsgHtml) + '\n\n⚠️ خطا در ارسال تصویر فیش؛ لطفاً تصویر را در پنل وب‌سایت مشاهده کنید.',
+                reply_markup: { inline_keyboard: adminInlineKeyboard }
+              });
+            } catch (e) {
+              console.error('Error sending fallback receipt text to Telegram admin (Plain Text):', e);
             }
           }
         })().catch(err => console.error(err));
@@ -288,6 +322,7 @@ async function startServer() {
       if (settings.adminBaleChatId && settings.baleToken) {
         (async () => {
           let sent = false;
+          // Try Stage 1: Send photo with HTML caption
           try {
             const res = await sendBotPhotoBase64(
               'https://tapi.bale.ai', 
@@ -300,20 +335,52 @@ async function startServer() {
             );
             if (res && res.ok) sent = true;
           } catch (e) {
-            console.error('Error sending receipt photo to Bale admin:', e);
+            console.error('Error sending receipt photo to Bale admin (HTML):', e);
           }
 
+          // Try Stage 2: Send photo with Plain Text caption
           if (!sent) {
-            // Text fallback
             try {
-              await botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', {
+              const res = await sendBotPhotoBase64(
+                'https://tapi.bale.ai', 
+                settings.baleToken, 
+                settings.adminBaleChatId, 
+                stripHtml(adminMsgHtml), 
+                receiptImage, 
+                adminInlineKeyboard,
+                undefined
+              );
+              if (res && res.ok) sent = true;
+            } catch (e) {
+              console.error('Error sending receipt photo to Bale admin (Plain Text):', e);
+            }
+          }
+
+          // Try Stage 3: Send HTML message
+          if (!sent) {
+            try {
+              const res = await botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', {
                 chat_id: settings.adminBaleChatId,
                 text: adminMsgHtml + '\n\n⚠️ <i>خطا در ارسال تصویر فیش؛ لطفاً تصویر را در پنل وب‌سایت مشاهده کنید.</i>',
                 parse_mode: 'HTML',
                 reply_markup: { inline_keyboard: adminInlineKeyboard }
               });
+              if (res && res.ok) sent = true;
             } catch (e) {
-              console.error('Error sending fallback receipt text to Bale admin:', e);
+              console.error('Error sending fallback receipt text to Bale admin (HTML):', e);
+            }
+          }
+
+          // Try Stage 4: Send Plain Text message (Guaranteed to work)
+          if (!sent) {
+            try {
+              await botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', {
+                chat_id: settings.adminBaleChatId,
+                text: stripHtml(adminMsgHtml) + '\n\n⚠️ خطا در ارسال تصویر فیش؛ لطفاً تصویر را در پنل وب‌سایت مشاهده کنید.',
+                reply_markup: { inline_keyboard: adminInlineKeyboard }
+              });
+            } catch (e) {
+              console.error('Error sending fallback receipt text to Bale admin (Plain Text):', e);
             }
           }
         })().catch(err => console.error(err));

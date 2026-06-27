@@ -53,6 +53,11 @@ export function escapeHtml(str: any): string {
     .replace(/>/g, '&gt;');
 }
 
+export function stripHtml(str: any): string {
+  if (str === null || str === undefined) return '';
+  return String(str).replace(/<[^>]*>/g, '');
+}
+
 export async function sendBotPhotoBase64(apiHost: string, token: string, chatId: string | number, caption: string, base64Data: string, inlineKeyboard?: any, parseMode: string = 'Markdown') {
   try {
     const matches = base64Data.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
