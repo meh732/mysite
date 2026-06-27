@@ -184,6 +184,58 @@ async function startServer() {
     res.json({ success: true, transactions: transactions.filter(t => t.userIdentifier === req.query.userIdentifier) });
   });
 
+  app.post('/api/wallet/topup', (req, res) => {
+    const { userIdentifier, amount, method, cardHolderName } = req.body;
+    const user = users.find(u => u.email === userIdentifier || u.phone === userIdentifier);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'کاربر مورد نظر یافت نشد.' });
+    }
+
+    const amt = parseInt(amount, 10);
+    if (isNaN(amt) || amt <= 0) {
+      return res.status(400).json({ success: false, message: 'مبلغ شارژ معتبر نیست.' });
+    }
+
+    const isOnline = method === 'online';
+
+    if (isOnline) {
+      if (!settings.onlinePaymentEnabled || !settings.onlinePaymentUrl) {
+        return res.status(400).json({ success: false, message: 'درگاه پرداخت آنلاین موقتاً غیرفعال است یا لینک پرداخت تعریف نشده است.' });
+      }
+    } else {
+      if (!settings.cardPaymentEnabled) {
+        return res.status(400).json({ success: false, message: 'روش کارت به کارت موقتاً غیرفعال شده است.' });
+      }
+    }
+
+    // Register transaction
+    const newTransaction = {
+      id: Date.now(),
+      userIdentifier,
+      amount: amt,
+      type: 'credit' as const,
+      description: isOnline 
+        ? `شارژ مستقیم از درگاه بانکی - پرداخت‌کننده: ${cardHolderName || 'نامشخص'}` 
+        : `درخواست کارت به کارت - فرستنده: ${cardHolderName || 'نامشخص'}`,
+      status: isOnline ? 'approved' as const : 'pending' as const,
+      createdAt: new Date().toISOString()
+    };
+
+    // Credit instantly if online
+    if (isOnline) {
+      user.walletBalance = (user.walletBalance || 0) + amt;
+    }
+
+    transactions.push(newTransaction);
+    saveDatabase();
+
+    res.json({
+      success: true,
+      walletBalance: user.walletBalance,
+      transaction: newTransaction
+    });
+  });
+
   // --- API Routes: Admin Panel ---
   app.get('/api/admin/settings', (req, res) => res.json(settings));
   app.post('/api/admin/settings', (req, res) => {

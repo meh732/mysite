@@ -198,16 +198,26 @@ export default function UserDashboard() {
       body: JSON.stringify({
         userIdentifier,
         amount: amt,
-        cardHolderName: cardHolder || 'آنلاین شتاب'
+        method: topupMethod,
+        cardHolderName: cardHolder || (topupMethod === 'online' ? 'آنلاین شتاب' : 'نامشخص')
       })
     })
       .then(res => res.json())
       .then(data => {
         if (data.success) {
-          setWalletSuccessMsg(`اعتبار موجودی حساب شما با موفقیت مبلغ ${amt.toLocaleString('fa-IR')} تومان از طریق درگاه آنلاین افزایش یافت.`);
+          if (topupMethod === 'online') {
+            setWalletSuccessMsg(`موجودی حساب شما با موفقیت به میزان ${amt.toLocaleString('fa-IR')} تومان افزایش یافت و پرداخت شبیه‌سازی شد.`);
+            if (adminSettings?.onlinePaymentUrl) {
+              window.open(adminSettings.onlinePaymentUrl, '_blank');
+            }
+          } else {
+            setWalletSuccessMsg(`درخواست کارت به کارت شما به مبلغ ${amt.toLocaleString('fa-IR')} تومان ثبت شد. لطفاً تصویر رسید خود را در بخش پشتیبانی ارسال نمایید تا پس از تایید مدیریت، حساب شما شارژ گردد.`);
+          }
           setProfile(prev => ({ ...prev, walletBalance: data.walletBalance }));
           setTransactions(prev => [data.transaction, ...prev]);
           setCardHolder('');
+        } else {
+          alert(data.message || 'خطا در افزایش اعتبار');
         }
       });
   };
@@ -400,20 +410,20 @@ export default function UserDashboard() {
   });
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white selection:bg-indigo-500/30 font-sans" dir="rtl">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 selection:bg-indigo-500/30 font-sans" dir="rtl">
       
       {/* Header Area */}
       <nav className="glass-panel !rounded-none !border-x-0 !border-t-0 px-6 py-4 sticky top-0 z-40 backdrop-blur-md">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <button onClick={() => navigate('/')} className="text-zinc-400 hover:text-white transition-all cursor-pointer p-1.5 hover:bg-zinc-900 rounded-lg">
+            <button onClick={() => navigate('/')} className="text-zinc-400 hover:text-zinc-50 transition-all cursor-pointer p-1.5 hover:bg-zinc-900 rounded-lg">
               <ArrowRight className="w-6 h-6 rotate-180" />
             </button>
             <div className="flex flex-col">
               {adminSettings?.siteLogoUrl ? (
                 <img src={adminSettings.siteLogoUrl} alt="Logo" className="h-8 object-contain mb-1" />
               ) : (
-                <span className="font-bold text-lg sm:text-xl text-white">پنل کاربری دیجیتال استور</span>
+                <span className="font-bold text-lg sm:text-xl text-zinc-100">پنل کاربری دیجیتال استور</span>
               )}
               <span className="text-[10px] text-zinc-400 hidden sm:block">خرید هوشمندانه سرویس‌ها و پشتیبانی تیکت کارگزار</span>
             </div>
@@ -474,7 +484,7 @@ export default function UserDashboard() {
                 className={`px-4 py-3 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer flex items-center justify-start gap-4 flex-shrink-0 ${
                   activeTab === tab.id 
                     ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10' 
-                    : 'text-zinc-400 bg-zinc-900/10 hover:bg-zinc-900 hover:text-white border-transparent'
+                    : 'text-zinc-400 bg-zinc-900/10 hover:bg-zinc-900 hover:text-zinc-50 border-transparent'
                 }`}
               >
                 {tab.icon}
@@ -761,60 +771,125 @@ export default function UserDashboard() {
                   </div>
                 </div>
 
-                {/* Wallet Balance Top-up */}
-                <div className="md:col-span-2 glass-panel p-5.5 border border-zinc-900/60 flex flex-col justify-between">
-                  <div>
-                    <form onSubmit={handleTopupSubmit} className="space-y-4">
-                      <div className="space-y-3">
-                        <span className="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
-                          <CreditCard className="w-4 h-4 text-indigo-400" />
-                          افزایش اعتبار آنی و خودکار از درگاه مستقیم
-                        </span>
-                        {adminSettings?.onlinePaymentUrl ? (
-                          <p className="text-[11px] text-zinc-500 leading-relaxed bg-zinc-950/40 p-2.5 rounded-lg border border-zinc-900">
-                            درگاه فعال مدیر: <a href={adminSettings.onlinePaymentUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-400 underline font-mono">{adminSettings.onlinePaymentUrl}</a>. عملیات به صورت شبیه‌سازی شده حساب شما را آنی شارژ می‌کند.
-                          </p>
-                        ) : null}
-                      </div>
+                 {/* Wallet Balance Top-up */}
+                 <div className="md:col-span-2 glass-panel p-5.5 border border-zinc-900/60 flex flex-col justify-between">
+                   <div>
+                     {/* Payment Method Selector Switch */}
+                     <div className="grid grid-cols-2 gap-3 p-1 bg-zinc-950/60 rounded-xl border border-zinc-900 mb-6">
+                       <button
+                         type="button"
+                         disabled={!adminSettings?.onlinePaymentEnabled || !adminSettings?.onlinePaymentUrl}
+                         onClick={() => setTopupMethod('online')}
+                         className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                           topupMethod === 'online'
+                             ? 'bg-indigo-600 text-white shadow-md'
+                             : 'text-zinc-400 hover:text-zinc-200 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed'
+                         }`}
+                       >
+                         <Sparkles className="w-3.5 h-3.5" />
+                         <span>درگاه آنلاین (زرین‌پال)</span>
+                       </button>
+                       <button
+                         type="button"
+                         disabled={!adminSettings?.cardPaymentEnabled}
+                         onClick={() => setTopupMethod('card')}
+                         className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                           topupMethod === 'card'
+                             ? 'bg-indigo-600 text-white shadow-md'
+                             : 'text-zinc-400 hover:text-zinc-200 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed'
+                         }`}
+                       >
+                         <CreditCard className="w-3.5 h-3.5" />
+                         <span>کارت به کارت (واریز دستی)</span>
+                       </button>
+                     </div>
 
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div>
-                          <label className="block text-[10px] text-zinc-500 mb-1.5">مبلغ شارژ (تومان):</label>
-                          <select 
-                            value={topupAmount} 
-                            onChange={(e) => setTopupAmount(e.target.value)}
-                            className="w-full bg-zinc-950 border border-zinc-850 rounded-xl px-3 py-2.5 text-xs outline-none focus:border-indigo-500 text-zinc-200 transition-colors cursor-pointer"
-                          >
-                            <option value="50000">۵۰,۰۰۰ تومان</option>
-                            <option value="100000">۱۰۰,۰۰۰ تومان</option>
-                            <option value="200000">۲۰۰,۰۰۰ تومان</option>
-                            <option value="500000">۵۰۰,۰۰۰ تومان</option>
-                            <option value="1000000">۱,۰۰۰,۰۰۰ تومان</option>
-                            <option value="2000000">۲,۰۰۰,۰۰۰ تومان</option>
-                          </select>
-                        </div>
-                        
-                        <div>
-                          <label className="block text-[10px] text-zinc-500 mb-1.5">نام واریز کننده (روی کارت فرستنده):</label>
-                          <input 
-                            type="text" 
-                            required
-                            placeholder="مثلا: محمد علوی"
-                            value={cardHolder} 
-                            onChange={(e) => setCardHolder(e.target.value)}
-                            className="w-full bg-zinc-950 border border-zinc-850 rounded-xl px-3 py-2.5 text-xs outline-none focus:border-indigo-500 text-zinc-250 transition-colors"
-                          />
-                        </div>
-                      </div>
+                     {(!adminSettings?.onlinePaymentEnabled || !adminSettings?.onlinePaymentUrl) && !adminSettings?.cardPaymentEnabled ? (
+                       <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs p-4 rounded-xl text-center">
+                         ⚠️ تمامی روش‌های افزایش اعتبار کیف پول توسط مدیریت موقتاً غیرفعال شده‌اند.
+                       </div>
+                     ) : (
+                       <form onSubmit={handleTopupSubmit} className="space-y-4">
+                         <div className="space-y-3">
+                           <span className="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
+                             <CreditCard className="w-4 h-4 text-indigo-400" />
+                             {topupMethod === 'online' ? 'شارژ آنی کیف پول از درگاه مستقیم زرین‌پال' : 'واریز به شماره کارت مدیریت و ثبت فیش'}
+                           </span>
+                           
+                           {topupMethod === 'online' ? (
+                             adminSettings?.onlinePaymentUrl ? (
+                               <p className="text-[11px] text-zinc-500 leading-relaxed bg-zinc-950/40 p-2.5 rounded-lg border border-zinc-900">
+                                 درگاه فعال مدیر: <a href={adminSettings.onlinePaymentUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-400 underline font-mono">{adminSettings.onlinePaymentUrl}</a>. پس از پرداخت موفقیت‌آمیز، موجودی شما به‌صورت خودکار بروزرسانی می‌شود.
+                               </p>
+                             ) : (
+                               <p className="text-[11px] text-red-400 bg-red-950/20 p-2.5 rounded-lg border border-red-950/30">
+                                 ⚠️ لینک درگاه پرداخت آنلاین توسط مدیریت تعریف نشده است.
+                               </p>
+                             )
+                           ) : (
+                             <div className="bg-zinc-950/50 p-3.5 rounded-xl border border-zinc-900 space-y-2 text-xs text-zinc-300">
+                               <div className="flex justify-between items-center">
+                                 <span className="text-zinc-500">شماره کارت بانکی:</span>
+                                 <span className="font-mono text-indigo-300 font-bold tracking-wider select-all">{adminSettings?.cardNo || '۶۰۳۷۹۹۱۸۰۰۰۰۰۰۰۰'}</span>
+                               </div>
+                               <div className="flex justify-between items-center">
+                                 <span className="text-zinc-500">صاحب حساب:</span>
+                                 <span className="font-bold text-zinc-200">{adminSettings?.cardHolder || 'مدیریت دیجیتال استور'}</span>
+                               </div>
+                               {adminSettings?.cardBank && (
+                                 <div className="flex justify-between items-center">
+                                   <span className="text-zinc-500">بانک صادرکننده:</span>
+                                   <span className="text-zinc-400">{adminSettings.cardBank}</span>
+                                 </div>
+                               )}
+                               <p className="text-[10px] text-amber-400/80 mt-2 leading-relaxed">
+                                 💡 لطفاً پس از واریز مبلغ، نام واریزکننده را وارد کنید و رسید را در بخش تیکت‌ها برای مدیریت ارسال نمایید.
+                               </p>
+                             </div>
+                           )}
+                         </div>
 
-                      <button 
-                        type="submit" 
-                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-2.5 text-xs font-bold transition-all cursor-pointer"
-                      >
-                        {topupMethod === 'online' ? 'اتصال فرضی به درگاه و افزایش اعتبار آنی' : 'ارسال درخواست و فیش پرداخت برای ادمین'}
-                      </button>
-                    </form>
-                  </div>
+                         <div className="grid gap-4 sm:grid-cols-2">
+                           <div>
+                             <label className="block text-[10px] text-zinc-500 mb-1.5">مبلغ شارژ (تومان):</label>
+                             <select 
+                               value={topupAmount} 
+                               onChange={(e) => setTopupAmount(e.target.value)}
+                               className="w-full bg-zinc-950 border border-zinc-850 rounded-xl px-3 py-2.5 text-xs outline-none focus:border-indigo-500 text-zinc-200 transition-colors cursor-pointer"
+                             >
+                               <option value="50000">۵۰,۰۰۰ تومان</option>
+                               <option value="100000">۱۰۰,۰۰۰ تومان</option>
+                               <option value="200000">۲۰۰,۰۰۰ تومان</option>
+                               <option value="500000">۵۰۰,۰۰۰ تومان</option>
+                               <option value="1000000">۱,۰۰۰,۰۰۰ تومان</option>
+                               <option value="2000000">۲,۰۰۰,۰۰۰ تومان</option>
+                             </select>
+                           </div>
+                           
+                           <div>
+                             <label className="block text-[10px] text-zinc-500 mb-1.5">
+                               {topupMethod === 'online' ? 'نام و نام خانوادگی (جهت ثبت در تراکنش):' : 'نام واریز کننده (روی کارت فرستنده):'}
+                             </label>
+                             <input 
+                               type="text" 
+                               required
+                               placeholder="مثلا: محمد علوی"
+                               value={cardHolder} 
+                               onChange={(e) => setCardHolder(e.target.value)}
+                               className="w-full bg-zinc-950 border border-zinc-850 rounded-xl px-3 py-2.5 text-xs outline-none focus:border-indigo-500 text-zinc-250 transition-colors"
+                             />
+                           </div>
+                         </div>
+
+                         <button 
+                           type="submit" 
+                           className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-2.5 text-xs font-bold transition-all cursor-pointer"
+                         >
+                           {topupMethod === 'online' ? 'اتصال به درگاه و پرداخت آنلاین' : 'ثبت درخواست و فیش واریز کارت به کارت'}
+                         </button>
+                       </form>
+                     )}
+                   </div>
 
                   {walletSuccessMsg && (
                     <div className="mt-3.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs p-3 rounded-xl">

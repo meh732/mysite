@@ -20,19 +20,46 @@ const IconMap: Record<string, React.ReactNode> = {
 };
 
 export function formatPrice(priceVal: string | number): string {
-  if (!priceVal) return '';
-  const str = String(priceVal);
-  const normalized = str.replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
+  if (priceVal === undefined || priceVal === null || priceVal === '') return '۰ تومان';
+  let str = String(priceVal).trim();
+  
+  const persianDigits = '۰۱۲۳۴۵۶۷۸۹';
+  const arabicDigits = '٠١٢٣٤٥٦٧٨٩';
+  
+  let normalized = '';
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    const pIdx = persianDigits.indexOf(char);
+    const aIdx = arabicDigits.indexOf(char);
+    if (pIdx !== -1) {
+      normalized += pIdx.toString();
+    } else if (aIdx !== -1) {
+      normalized += aIdx.toString();
+    } else {
+      normalized += char;
+    }
+  }
+  
   const cleanNumStr = normalized.replace(/[^\d]/g, '');
-  if (!cleanNumStr) return str;
-
+  if (!cleanNumStr) return '۰ تومان';
+  
   const num = parseInt(cleanNumStr, 10);
-  const formatted = num.toLocaleString('fa-IR');
+  const englishFormatted = num.toLocaleString('en-US');
+  
+  let result = '';
+  for (let i = 0; i < englishFormatted.length; i++) {
+    const char = englishFormatted[i];
+    if (char >= '0' && char <= '9') {
+      result += persianDigits[parseInt(char, 10)];
+    } else {
+      result += char;
+    }
+  }
   
   if (str.includes('از') || str.includes('شروع')) {
-    return `از ${formatted} تومان`;
+    return `از ${result} تومان`;
   }
-  return `${formatted} تومان`;
+  return `${result} تومان`;
 }
 
 export default function Home() {
@@ -62,7 +89,7 @@ export default function Home() {
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState('');
   const [enableMobileLogin, setEnableMobileLogin] = useState(false);
-  const [siteConfig, setSiteConfig] = useState({
+  const [siteConfig, setSiteConfig] = useState<any>({
     socialInstagram: '',
     socialTelegram: '',
     socialWhatsapp: '',
@@ -72,7 +99,25 @@ export default function Home() {
     contactPhone: '',
     contactEmail: '',
     contactAddress: '',
-    heroVideoUrl: ''
+    heroVideoUrl: '',
+    siteLogoUrl: '',
+    siteName: 'دیجیتال استور',
+    heroTitle: 'مرجع تخصصی خرید اشتراک هوش مصنوعی و خدمات نوین دیجیتال',
+    heroSubtitle: 'با ما، آینده همین امروز در دستان شماست. تحویل آنی و پشتیبانی ۲۴ ساعته واقعی.',
+    servicesTitle: 'خدمات نوین و محصولات دیجیتال',
+    servicesSubtitle: 'بهترین و باکیفیت‌ترین سرویس‌های پریمیوم را با خیال راحت تهیه کنید',
+    deliveryTitle: 'تحویل آنی و مطمئن',
+    deliveryDesc: 'تمام محصولات اکانت بلافاصله پس از پرداخت تحویل داده خواهند شد.',
+    supportTitle: 'پشتیبانی ۲۴/۷ واقعی',
+    supportDesc: 'پشتیبانی کامل و پاسخگویی به تمام تیکت‌ها و مشکلات شما در سریع‌ترین زمان ممکن.',
+    paymentTitle: 'پرداخت امن و سریع',
+    paymentDesc: 'پرداخت آنلاین از طریق درگاه‌های معتبر یا واریز مستقیم کارت به کارت با امکان ثبت رسید.',
+    footerCopy: 'تمامی حقوق مادی و معنوی محفوظ است. توسعه داده شده برای تجارت مدرن شما.',
+    enableHeroSection: true,
+    enableFeaturesSection: true,
+    enableProductsSection: true,
+    enableStatsSection: true,
+    enableVideoBackground: true
   });
   
   // Reusable inline Toast system instead of iframe-blocked alerts
@@ -122,18 +167,10 @@ export default function Home() {
       .then(r => r.json())
       .then(d => {
         setEnableMobileLogin(d.enableMobileLogin);
-        setSiteConfig({
-          socialInstagram: d.socialInstagram || '',
-          socialTelegram: d.socialTelegram || '',
-          socialWhatsapp: d.socialWhatsapp || '',
-          socialBale: d.socialBale || '',
-          socialX: d.socialX || '',
-          registrationMethod: d.registrationMethod || 'both',
-          contactPhone: d.contactPhone || '',
-          contactEmail: d.contactEmail || '',
-          contactAddress: d.contactAddress || '',
-          heroVideoUrl: d.heroVideoUrl || ''
-        });
+        setSiteConfig((prev: any) => ({
+          ...prev,
+          ...d
+        }));
       });
   }, []);
 
@@ -500,7 +537,7 @@ export default function Home() {
                   <Store className="text-white w-5 h-5" />
                 </div>
               )}
-              {!siteConfig?.siteLogoUrl && <span className="font-bold text-xl tracking-tight hidden sm:block">دیجیتال استور</span>}
+              {!siteConfig?.siteLogoUrl && <span className="font-bold text-xl tracking-tight hidden sm:block">{siteConfig.siteName || 'دیجیتال استور'}</span>}
             </div>
 
             {/* Products Interactive Dropdown & Details */}
@@ -508,7 +545,7 @@ export default function Home() {
               <button 
                 onMouseEnter={() => setIsProductsDropdownOpen(true)}
                 onClick={() => setIsProductsDropdownOpen(!isProductsDropdownOpen)}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-zinc-300 hover:text-white hover:bg-zinc-900 border border-zinc-800/40 transition-all cursor-pointer"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-zinc-300 hover:text-zinc-50 hover:bg-zinc-800 border border-zinc-800/40 transition-all cursor-pointer"
               >
                 <Grid className="w-4 h-4 text-indigo-400" />
                 <span>محصولات و دسته‌بندی‌ها</span>
@@ -598,7 +635,7 @@ export default function Home() {
           </div>
           
           <div className="flex items-center gap-4">
-            <Link to="/admin" className="text-sm text-zinc-400 hover:text-white transition-colors flex items-center gap-1">
+            <Link to="/admin" className="text-sm text-zinc-400 hover:text-zinc-50 transition-colors flex items-center gap-1">
               <LayoutDashboard className="w-4 h-4" />
               <span className="hidden sm:inline">ورود مدیران</span>
             </Link>
@@ -638,7 +675,7 @@ export default function Home() {
             >
               <button 
                 onClick={() => setIsLoginModalOpen(false)}
-                className="absolute top-4 left-4 text-zinc-500 hover:text-white cursor-pointer"
+                className="absolute top-4 left-4 text-zinc-500 hover:text-zinc-50 cursor-pointer"
               >
                 ✕
               </button>
@@ -681,7 +718,7 @@ export default function Home() {
                           onChange={e => setForgotIdentifier(e.target.value)}
                           dir="ltr"
                           required
-                          className="w-full bg-zinc-900 border border-zinc-800 text-white focus:border-indigo-500 rounded-xl px-4 py-2.5 text-center text-sm outline-none transition-colors"
+                          className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-center text-sm outline-none transition-colors"
                         />
                       </div>
                       <button 
@@ -707,7 +744,7 @@ export default function Home() {
                           onChange={e => setForgotOtpCode(e.target.value)}
                           dir="ltr"
                           required
-                          className="w-full bg-zinc-900 border border-zinc-800 text-white focus:border-indigo-500 rounded-xl px-4 py-2.5 text-center text-sm outline-none tracking-widest font-mono transition-colors"
+                          className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-center text-sm outline-none tracking-widest font-mono transition-colors"
                         />
                       </div>
                       <div>
@@ -719,7 +756,7 @@ export default function Home() {
                           onChange={e => setForgotNewPassword(e.target.value)}
                           dir="ltr"
                           required
-                          className="w-full bg-zinc-900 border border-zinc-800 text-white focus:border-indigo-500 rounded-xl px-4 py-2.5 text-center text-sm outline-none transition-colors"
+                          className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-center text-sm outline-none transition-colors"
                         />
                       </div>
                       <button 
@@ -774,7 +811,7 @@ export default function Home() {
                           onChange={e => setLoginIdentifier(e.target.value)}
                           dir="ltr"
                           required
-                          className="w-full bg-zinc-900 border border-zinc-800 text-white focus:border-indigo-500 rounded-xl px-4 py-2.5 text-center text-sm outline-none transition-colors"
+                          className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-center text-sm outline-none transition-colors"
                         />
                       </div>
                       <div>
@@ -799,7 +836,7 @@ export default function Home() {
                           onChange={e => setLoginPassword(e.target.value)}
                           dir="ltr"
                           required
-                          className="w-full bg-zinc-900 border border-zinc-850 text-white focus:border-indigo-500 rounded-xl px-4 py-2.5 text-center text-sm outline-none transition-colors"
+                          className="w-full bg-zinc-900 border border-zinc-850 text-zinc-100 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-center text-sm outline-none transition-colors"
                         />
                       </div>
                       <button 
@@ -828,7 +865,7 @@ export default function Home() {
                                 value={email}
                                 onChange={e => setEmail(e.target.value)}
                                 dir="ltr"
-                                className="w-full bg-zinc-900 border border-zinc-850 text-white focus:border-indigo-500 rounded-xl px-4 py-2.5 text-center text-xs outline-none transition-colors"
+                                className="w-full bg-zinc-900 border border-zinc-850 text-zinc-100 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-center text-xs outline-none transition-colors"
                               />
                             </div>
                           ) : (
@@ -839,7 +876,7 @@ export default function Home() {
                                 value={phone}
                                 onChange={e => setPhone(e.target.value)}
                                 dir="ltr"
-                                className="w-full bg-zinc-900 border border-zinc-800 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-center text-xs outline-none transition-colors"
+                                className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-center text-xs outline-none transition-colors"
                               />
                             </div>
                           )}
@@ -861,7 +898,7 @@ export default function Home() {
                               value={otpCode}
                               onChange={e => setOtpCode(e.target.value)}
                               dir="ltr"
-                              className="w-full bg-zinc-900 border border-zinc-800 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-center tracking-widest outline-none transition-colors"
+                              className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-center tracking-widest outline-none transition-colors"
                             />
                           </div>
                           <button 
@@ -912,7 +949,7 @@ export default function Home() {
                         onChange={e => setRegisterEmail(e.target.value)}
                         dir="ltr"
                         required={siteConfig.registrationMethod === 'email_only'}
-                        className={`w-full bg-zinc-900 border text-white focus:border-indigo-500 rounded-xl px-4 py-2 text-xs outline-none transition-colors ${emailError ? 'border-red-500/80' : 'border-zinc-800'}`}
+                        className={`w-full bg-zinc-900 border text-zinc-100 focus:border-indigo-500 rounded-xl px-4 py-2 text-xs outline-none transition-colors ${emailError ? 'border-red-500/80' : 'border-zinc-800'}`}
                       />
                       {emailError && (
                         <p className="text-[9px] text-rose-400 mt-1 flex items-center gap-1">
@@ -932,7 +969,7 @@ export default function Home() {
                         onChange={e => setRegisterPhone(e.target.value)}
                         dir="ltr"
                         required={siteConfig.registrationMethod === 'phone_only'}
-                        className={`w-full bg-zinc-900 border text-white focus:border-indigo-500 rounded-xl px-4 py-2 text-xs outline-none transition-colors ${phoneError ? 'border-red-500/80' : 'border-zinc-800'}`}
+                        className={`w-full bg-zinc-900 border text-zinc-100 focus:border-indigo-500 rounded-xl px-4 py-2 text-xs outline-none transition-colors ${phoneError ? 'border-red-500/80' : 'border-zinc-800'}`}
                       />
                       {phoneError && (
                         <p className="text-[9px] text-rose-400 mt-1 flex items-center gap-1">
@@ -981,27 +1018,30 @@ export default function Home() {
 
       <main className="max-w-7xl mx-auto px-6 py-12">
         {/* Cinematic Hero Video Header Banner */}
-        {(() => {
+        {siteConfig.enableHeroSection !== false && (() => {
           const fallbackVideoUrl = "https://assets.mixkit.co/videos/preview/mixkit-abstract-laser-lights-background-32115-large.mp4";
           const currentVideoUrl = siteConfig.heroVideoUrl || fallbackVideoUrl;
           return (
-            <div className="relative mb-12 overflow-hidden rounded-[32px] border border-zinc-200/50 dark:border-zinc-800/60 bg-zinc-950/40 h-[340px] md:h-[420px] flex items-center justify-center text-center p-8 shadow-2xl">
+            <div className="relative mb-12 overflow-hidden rounded-[32px] border border-zinc-200/50 dark:border-zinc-800/60 bg-gradient-to-br from-indigo-950 via-zinc-950 to-purple-950 h-[340px] md:h-[420px] flex items-center justify-center text-center p-8 shadow-2xl">
               {/* Background Video */}
-              <video 
-                key={currentVideoUrl}
-                autoPlay 
-                loop 
-                muted 
-                playsInline 
-                className="absolute inset-0 w-full h-full object-cover opacity-35 pointer-events-none"
-              >
-                <source src={currentVideoUrl} type="video/mp4" />
-              </video>
+              {siteConfig.enableVideoBackground !== false && (
+                <video 
+                  key={currentVideoUrl}
+                  autoPlay 
+                  loop 
+                  muted 
+                  playsInline 
+                  className="absolute inset-0 w-full h-full object-cover opacity-35 pointer-events-none"
+                >
+                  <source src={currentVideoUrl} type="video/mp4" />
+                </video>
+              )}
               
               {/* Subtle Gradient Overlay */}
-              <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/50 to-indigo-950/25 pointer-events-none" />
-              <div className="absolute inset-0 bg-radial from-indigo-500/10 via-transparent to-transparent pointer-events-none" />
-
+              <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/40 to-indigo-950/25 pointer-events-none" />
+              <div className="absolute inset-0 bg-radial from-indigo-500/15 via-transparent to-transparent pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-tr from-purple-500/5 via-transparent to-indigo-500/5 pointer-events-none" />
+ 
               {/* Dynamic Slogan Text Content */}
               <div className="relative z-10 max-w-2xl mx-auto space-y-6">
                 <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-indigo-400 text-xs font-bold uppercase tracking-wider animate-pulse">
@@ -1009,10 +1049,12 @@ export default function Home() {
                   <span>بروزرسانی زنده و هوشمند</span>
                 </div>
                 <h1 className="text-3xl md:text-5xl font-black text-white leading-tight tracking-tight drop-shadow-md">
-                  فناوری نوین، <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-indigo-300">در دستان شما</span>
+                  {siteConfig.heroTitle || (
+                    <>فناوری نوین، <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-indigo-300">در دستان شما</span></>
+                  )}
                 </h1>
                 <p className="text-zinc-300 text-xs md:text-sm max-w-lg mx-auto leading-relaxed drop-shadow">
-                  باکیفیت‌ترین لایسنس‌ها، اشتراک‌های ویژه، و خدمات برنامه‌نویسی و بات‌های هوشمند را در محیطی مدرن به صورت آنی دریافت کنید.
+                  {siteConfig.heroSubtitle || "باکیفیت‌ترین لایسنس‌ها، اشتراک‌های ویژه، و خدمات برنامه‌نویسی و بات‌های هوشمند را در محیطی مدرن به صورت آنی دریافت کنید."}
                 </p>
                 
                 <div className="flex items-center justify-center gap-4 pt-2">
@@ -1043,8 +1085,8 @@ export default function Home() {
         {products.filter(p => p.active !== false).length > 0 && (
           <div className="grid grid-cols-12 gap-6 mb-16">
             
-            {/* Cinematic Slider - Col Span 8 */}
-            <div className="col-span-12 lg:col-span-8 relative group overflow-hidden rounded-3xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-100/60 dark:bg-zinc-950/40 p-1 backdrop-blur-md">
+            {/* Cinematic Slider - Dynamic Col Span */}
+            <div className={`col-span-12 ${siteConfig.enableFeaturesSection !== false ? 'lg:col-span-8' : ''} relative group overflow-hidden rounded-3xl border border-zinc-800/40 dark:border-zinc-800/80 bg-zinc-900/40 dark:bg-zinc-950/40 p-1 backdrop-blur-md`}>
               <div className="relative h-[340px] md:h-[380px] w-full overflow-hidden rounded-[22px] bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-zinc-950/20 flex flex-col justify-between p-6 sm:p-10">
                 
                 {/* Background glow animation */}
@@ -1054,7 +1096,7 @@ export default function Home() {
                 <div className="flex items-center justify-between z-10">
                   <div className="flex items-center gap-1.5 px-3.5 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-full">
                     <Sparkles className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400 animate-pulse" />
-                    <span className="text-[11px] font-extrabold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">پیشنهاد برگزیده دیجیتال استور</span>
+                    <span className="text-[11px] font-extrabold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">پیشنهاد برگزیده {siteConfig.siteName || 'دیجیتال استور'}</span>
                   </div>
                   <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-550">
                     {activeSlide + 1} از {products.filter(p => p.active !== false).slice(0, 4).length}
@@ -1085,7 +1127,7 @@ export default function Home() {
                           </div>
                           
                           <div className="flex flex-wrap items-center gap-4 pt-1">
-                            <div className="text-xs sm:text-sm bg-zinc-200/50 dark:bg-zinc-900/60 border border-zinc-300 dark:border-zinc-800 px-4 py-2 rounded-xl text-zinc-700 dark:text-zinc-300 font-bold">
+                            <div className="text-xs sm:text-sm bg-zinc-850/60 dark:bg-zinc-900/60 border border-zinc-800/60 dark:border-zinc-800 px-4 py-2 rounded-xl text-zinc-550 dark:text-zinc-300 font-bold">
                               قیمت استثنایی: {formatPrice(prod.price)}
                             </div>
                             <button
@@ -1112,7 +1154,7 @@ export default function Home() {
                       <button
                         key={idx}
                         onClick={() => setActiveSlide(idx)}
-                        className={`h-2 rounded-full transition-all duration-300 ${idx === activeSlide ? 'w-6 bg-indigo-500' : 'w-2 bg-zinc-300 dark:bg-zinc-800'}`}
+                        className={`h-2 rounded-full transition-all duration-300 ${idx === activeSlide ? 'w-6 bg-indigo-500' : 'w-2 bg-zinc-800 dark:bg-zinc-800'}`}
                       />
                     ))}
                   </div>
@@ -1124,7 +1166,7 @@ export default function Home() {
                         const len = products.filter(p => p.active !== false).slice(0, 4).length;
                         setActiveSlide(p => (p - 1 + len) % len);
                       }}
-                      className="w-9 h-9 rounded-xl bg-zinc-200 dark:bg-zinc-900 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-500 border border-zinc-300 dark:border-zinc-800 flex items-center justify-center transition-colors cursor-pointer"
+                      className="w-9 h-9 rounded-xl bg-zinc-850 hover:bg-indigo-600 hover:text-white dark:bg-zinc-900 dark:hover:bg-indigo-500 text-zinc-400 dark:text-zinc-450 hover:border-indigo-600 border border-zinc-800/60 dark:border-zinc-800 flex items-center justify-center transition-colors cursor-pointer"
                     >
                       <ChevronRight className="w-5 h-5 animate-none rotate-180" />
                     </button>
@@ -1133,7 +1175,7 @@ export default function Home() {
                         const len = products.filter(p => p.active !== false).slice(0, 4).length;
                         setActiveSlide(p => (p + 1) % len);
                       }}
-                      className="w-9 h-9 rounded-xl bg-zinc-200 dark:bg-zinc-900 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-500 border border-zinc-300 dark:border-zinc-800 flex items-center justify-center transition-colors cursor-pointer"
+                      className="w-9 h-9 rounded-xl bg-zinc-850 hover:bg-indigo-600 hover:text-white dark:bg-zinc-900 dark:hover:bg-indigo-500 text-zinc-400 dark:text-zinc-450 hover:border-indigo-600 border border-zinc-800/60 dark:border-zinc-800 flex items-center justify-center transition-colors cursor-pointer"
                     >
                       <ChevronLeft className="w-5 h-5 animate-none rotate-180" />
                     </button>
@@ -1143,57 +1185,65 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Special Bento Tiles - Col Span 4 */}
-            <div className="col-span-12 lg:col-span-4 flex flex-col gap-4">
-              
-              {/* Tile 1: Delivery badge */}
-              <div className="group flex-1 bg-gradient-to-br from-emerald-500/5 via-teal-500/5 to-transparent border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl p-5 flex items-start gap-4 backdrop-blur-sm hover:border-emerald-500/30 transition-all duration-300">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 flex-shrink-0 shadow-inner group-hover:scale-105 transition-transform">
-                  <Zap className="w-6 h-6" />
+            {/* Special Bento Tiles - Dynamic Visibility */}
+            {siteConfig.enableFeaturesSection !== false && (
+              <div className="col-span-12 lg:col-span-4 flex flex-col gap-4">
+                
+                {/* Tile 1: Delivery badge */}
+                <div className="group flex-1 bg-gradient-to-br from-emerald-500/5 via-teal-500/5 to-transparent border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl p-5 flex items-start gap-4 backdrop-blur-sm hover:border-emerald-500/30 transition-all duration-300">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 flex-shrink-0 shadow-inner group-hover:scale-105 transition-transform">
+                    <Zap className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-zinc-850 dark:text-zinc-100 mb-1 flex items-center gap-1.5">
+                      {siteConfig.deliveryTitle || 'تحویل آنی اکانت‌ها'}
+                      <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-600 animate-pulse" />
+                    </h3>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                      {siteConfig.deliveryDesc || 'بلافاصله پس از تکمیل ثبت سفارش، لایسنس و اطلاعات اکانت به صورت خودکار پیام‌رسانی و ارسال می‌شود.'}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-sm font-bold text-zinc-850 dark:text-zinc-100 mb-1 flex items-center gap-1.5">
-                    تحویل آنی اکانت‌ها
-                    <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-600 animate-pulse" />
-                  </h3>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                    بلافاصله پس از تکمیل ثبت سفارش، لایسنس و اطلاعات اکانت به صورت خودکار پیام‌رسانی و ارسال می‌شود.
-                  </p>
-                </div>
-              </div>
 
-              {/* Tile 2: Support badge */}
-              <div className="group flex-1 bg-gradient-to-br from-purple-500/5 via-violet-500/5 to-transparent border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl p-5 flex items-start gap-4 backdrop-blur-sm hover:border-purple-500/30 transition-all duration-300">
-                <div className="w-12 h-12 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-500 flex-shrink-0 shadow-inner group-hover:scale-105 transition-transform">
-                  <CheckCircle2 className="w-6 h-6" />
+                {/* Tile 2: Support badge */}
+                <div className="group flex-1 bg-gradient-to-br from-purple-500/5 via-violet-500/5 to-transparent border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl p-5 flex items-start gap-4 backdrop-blur-sm hover:border-purple-500/30 transition-all duration-300">
+                  <div className="w-12 h-12 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-500 flex-shrink-0 shadow-inner group-hover:scale-105 transition-transform">
+                    <CheckCircle2 className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-zinc-850 dark:text-zinc-100 mb-1">
+                      {siteConfig.supportTitle || 'پشتیبانی ۲۴ ساعته مطمئن'}
+                    </h3>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                      {siteConfig.supportDesc || 'تیم مجرب پشتیبانی دیجیتال استور در هر ساعت از شبانه‌روز آماده پاسخگویی و راهنمایی شما عزیزان است.'}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-sm font-bold text-zinc-850 dark:text-zinc-100 mb-1">پشتیبانی ۲۴ ساعته مطمئن</h3>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                    تیم مجرب پشتیبانی دیجیتال استور در هر ساعت از شبانه‌روز آماده پاسخگویی و راهنمایی شما عزیزان است.
-                  </p>
-                </div>
-              </div>
 
-              {/* Tile 3: Safety badge */}
-              <div className="group flex-1 bg-gradient-to-br from-indigo-500/5 via-blue-500/5 to-transparent border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl p-5 flex items-start gap-4 backdrop-blur-sm hover:border-indigo-500/30 transition-all duration-300">
-                <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-500 flex-shrink-0 shadow-inner group-hover:scale-105 transition-transform">
-                  <ShieldCheck className="w-6 h-6" />
+                {/* Tile 3: Safety badge */}
+                <div className="group flex-1 bg-gradient-to-br from-indigo-500/5 via-blue-500/5 to-transparent border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl p-5 flex items-start gap-4 backdrop-blur-sm hover:border-indigo-500/30 transition-all duration-300">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-500 flex-shrink-0 shadow-inner group-hover:scale-105 transition-transform">
+                    <ShieldCheck className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-zinc-850 dark:text-zinc-100 mb-1">
+                      {siteConfig.paymentTitle || 'پرداخت امن و سریع'}
+                    </h3>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                      {siteConfig.paymentDesc || 'پرداختی کاملاً امن تحت پروتکل‌های رمزنگاری شده و گارانتی ۱۰۰ درصدی بازگشت وجه در صورت بروز مشکل.'}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-sm font-bold text-zinc-850 dark:text-zinc-100 mb-1">کاشی امنیت خرید شما</h3>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                    پرداختی کاملاً امن تحت پروتکل‌های رمزنگاری شده و گارانتی ۱۰۰ درصدی بازگشت وجه در صورت بروز مشکل.
-                  </p>
-                </div>
-              </div>
 
-            </div>
+              </div>
+            )}
           </div>
         )}
 
         {/* Categories / Products Hierarchical Display */}
-        <div className="space-y-16">
+        {siteConfig.enableProductsSection !== false && (
+          <>
+            <div className="space-y-16">
           {groups.filter(g => g.active !== false).map((group, gIdx) => {
             const groupSubGroups = subGroups.filter(sg => sg.groupId === group.id && sg.active !== false);
             // Products directly or indirectly in this group
@@ -1262,8 +1312,8 @@ export default function Home() {
                               </div>
                               <div className="flex items-center justify-between mt-auto pt-4 border-t border-zinc-200/50 dark:border-zinc-800/50">
                                 <span className="text-indigo-600 dark:text-indigo-400 font-bold">{formatPrice(prod.price)}</span>
-                                <button className="w-10 h-10 rounded-full bg-zinc-200 dark:bg-zinc-900 group-hover:bg-indigo-600 dark:group-hover:bg-indigo-500 border border-zinc-300 dark:border-zinc-800 group-hover:border-indigo-400 flex items-center justify-center transition-colors">
-                                  <ChevronLeft className="w-5 h-5 text-zinc-700 dark:text-white" />
+                                <button className="w-10 h-10 rounded-full bg-zinc-850 group-hover:bg-indigo-600 dark:bg-zinc-900 dark:group-hover:bg-indigo-500 border border-zinc-800/50 dark:border-zinc-800 group-hover:border-indigo-400 flex items-center justify-center transition-colors">
+                                  <ChevronLeft className="w-5 h-5 text-zinc-400 dark:text-zinc-450 group-hover:text-white dark:group-hover:text-white" />
                                 </button>
                               </div>
                             </motion.div>
@@ -1310,8 +1360,8 @@ export default function Home() {
                               </div>
                               <div className="flex items-center justify-between mt-auto pt-4 border-t border-zinc-200/50 dark:border-zinc-800/50">
                                 <span className="text-indigo-600 dark:text-indigo-400 font-bold">{formatPrice(prod.price)}</span>
-                                <button className="w-10 h-10 rounded-full bg-zinc-200 dark:bg-zinc-900 group-hover:bg-indigo-600 dark:group-hover:bg-indigo-500 border border-zinc-300 dark:border-zinc-800 group-hover:border-indigo-400 flex items-center justify-center transition-colors">
-                                  <ChevronLeft className="w-5 h-5 text-zinc-700 dark:text-white" />
+                                <button className="w-10 h-10 rounded-full bg-zinc-850 group-hover:bg-indigo-600 dark:bg-zinc-900 dark:group-hover:bg-indigo-500 border border-zinc-800/50 dark:border-zinc-800 group-hover:border-indigo-400 flex items-center justify-center transition-colors">
+                                  <ChevronLeft className="w-5 h-5 text-zinc-400 dark:text-zinc-450 group-hover:text-white dark:group-hover:text-white" />
                                 </button>
                               </div>
                             </motion.div>
@@ -1366,8 +1416,8 @@ export default function Home() {
                     </div>
                     <div className="flex items-center justify-between mt-auto pt-4 border-t border-zinc-200/50 dark:border-zinc-800/50">
                       <span className="text-indigo-600 dark:text-indigo-400 font-bold">{formatPrice(prod.price)}</span>
-                      <button className="w-10 h-10 rounded-full bg-zinc-200 dark:bg-zinc-900 group-hover:bg-indigo-600 dark:group-hover:bg-indigo-500 border border-zinc-300 dark:border-zinc-800 group-hover:border-indigo-400 flex items-center justify-center transition-colors">
-                        <ChevronLeft className="w-5 h-5 text-zinc-700 dark:text-white" />
+                      <button className="w-10 h-10 rounded-full bg-zinc-850 group-hover:bg-indigo-600 dark:bg-zinc-900 dark:group-hover:bg-indigo-500 border border-zinc-800/50 dark:border-zinc-800 group-hover:border-indigo-400 flex items-center justify-center transition-colors">
+                        <ChevronLeft className="w-5 h-5 text-zinc-400 dark:text-zinc-450 group-hover:text-white dark:group-hover:text-white" />
                       </button>
                     </div>
                   </motion.div>
@@ -1376,6 +1426,8 @@ export default function Home() {
             </section>
           );
         })()}
+          </>
+        )}
       </main>
 
       {/* --- Glassmorphic Checkout and Lot Menus (شیشه‌ای و راحت) --- */}
@@ -1390,7 +1442,7 @@ export default function Home() {
             >
               <button 
                 onClick={() => setSelectedProduct(null)}
-                className="absolute top-4 left-4 text-zinc-400 hover:text-white cursor-pointer w-8 h-8 flex items-center justify-center bg-zinc-950/60 rounded-full border border-zinc-800 hover:bg-zinc-800 transition-colors z-10"
+                className="absolute top-4 left-4 text-zinc-400 hover:text-zinc-50 cursor-pointer w-8 h-8 flex items-center justify-center bg-zinc-950/60 rounded-full border border-zinc-800 hover:bg-zinc-800 transition-colors z-10"
               >
                 ✕
               </button>
@@ -1406,7 +1458,7 @@ export default function Home() {
                       <span className="text-xs text-indigo-400 font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/10">
                         {selectedProduct.type === 'account' ? 'اکانت آماده' : 'سرویس توسعه نرم‌افزار'}
                       </span>
-                      <h3 className="text-2xl font-bold mt-1 text-white">{selectedProduct.title}</h3>
+                      <h3 className="text-2xl font-bold mt-1 text-zinc-100">{selectedProduct.title}</h3>
                     </div>
                   </div>
 
@@ -1447,7 +1499,7 @@ export default function Home() {
                           <button 
                             type="button"
                             onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                            className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white flex items-center justify-center cursor-pointer text-base select-none"
+                            className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 flex items-center justify-center cursor-pointer text-base select-none"
                           >
                             -
                           </button>
@@ -1455,7 +1507,7 @@ export default function Home() {
                           <button 
                             type="button"
                             onClick={() => setQuantity(quantity + 1)}
-                            className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white flex items-center justify-center cursor-pointer text-base select-none"
+                            className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 flex items-center justify-center cursor-pointer text-base select-none"
                           >
                             +
                           </button>
@@ -1469,7 +1521,7 @@ export default function Home() {
                           placeholder="مثلاً: ایمیل شخصی جهت ساخت اکانت جدید"
                           value={additionalDetails}
                           onChange={e => setAdditionalDetails(e.target.value)}
-                          className="w-full bg-zinc-900 border border-zinc-800/60 focus:border-indigo-500 rounded-xl px-4 py-2 text-sm outline-none transition-colors"
+                          className="w-full bg-zinc-900 border border-zinc-800/60 text-zinc-100 focus:border-indigo-500 rounded-xl px-4 py-2 text-sm outline-none transition-colors"
                         />
                       </div>
                     </div>
@@ -1516,7 +1568,7 @@ export default function Home() {
                           placeholder="توضیحات کلی از امکاناتی که مدنظر دارید بنویسید تا بررسی شده و زمان‌بندی تحویل مشخص گردد..."
                           value={additionalDetails}
                           onChange={e => setAdditionalDetails(e.target.value)}
-                          className="w-full bg-zinc-900 border border-zinc-800/60 focus:border-purple-500 rounded-xl px-4 py-2.5 text-sm outline-none transition-colors"
+                          className="w-full bg-zinc-900 border border-zinc-800/60 text-zinc-100 focus:border-purple-500 rounded-xl px-4 py-2.5 text-sm outline-none transition-colors"
                         ></textarea>
                       </div>
                     </div>
@@ -1597,7 +1649,7 @@ export default function Home() {
                   <div className="w-16 h-16 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full mx-auto flex items-center justify-center mb-6 shadow-lg shadow-emerald-500/5">
                     <CheckCircle2 className="w-10 h-10 animate-bounce" />
                   </div>
-                  <h3 className="text-2xl font-bold text-white mb-2">سفارش با موفقیت ثبت شد</h3>
+                  <h3 className="text-2xl font-bold text-zinc-100 mb-2">سفارش با موفقیت ثبت شد</h3>
                   <p className="text-sm text-zinc-400 max-w-sm mx-auto mb-6">
                     سفارش شما برای <strong className="text-zinc-200">"{selectedProduct.title}"</strong> با موفقیت در پایگاه داده ذخیره شد. کد سفارش شما:
                     <span className="block text-xl font-mono text-indigo-400 bg-zinc-900 border border-zinc-800 rounded-xl py-2 px-4 w-fit mx-auto mt-3 shadow-inner">
@@ -1656,7 +1708,7 @@ export default function Home() {
                   href={siteConfig.socialInstagram} 
                   target="_blank" 
                   rel="noreferrer"
-                  className="w-9 h-9 rounded-xl bg-zinc-200/55 dark:bg-zinc-900 hover:bg-pink-650/10 hover:text-pink-500 border border-zinc-300 dark:border-zinc-800 flex items-center justify-center transition-all shadow-inner"
+                  className="w-9 h-9 rounded-xl bg-zinc-850 dark:bg-zinc-900 text-zinc-550 dark:text-zinc-400 hover:text-pink-500 hover:bg-pink-500/10 dark:hover:bg-pink-500/10 border border-zinc-800/40 dark:border-zinc-800 flex items-center justify-center transition-all shadow-inner"
                 >
                   <Instagram className="w-4 h-4" />
                 </a>
@@ -1666,7 +1718,7 @@ export default function Home() {
                   href={siteConfig.socialTelegram} 
                   target="_blank" 
                   rel="noreferrer"
-                  className="w-9 h-9 rounded-xl bg-zinc-200/55 dark:bg-zinc-900 hover:bg-sky-655/10 hover:text-sky-400 border border-zinc-300 dark:border-zinc-800 flex items-center justify-center transition-all shadow-inner"
+                  className="w-9 h-9 rounded-xl bg-zinc-850 dark:bg-zinc-900 text-zinc-550 dark:text-zinc-400 hover:text-sky-400 hover:bg-sky-400/10 dark:hover:bg-sky-400/10 border border-zinc-800/40 dark:border-zinc-800 flex items-center justify-center transition-all shadow-inner"
                 >
                   <Send className="w-4 h-4" />
                 </a>
@@ -1677,9 +1729,9 @@ export default function Home() {
                   target="_blank" 
                   rel="noreferrer"
                   title="واتساپ پشتیبانی"
-                  className="w-9 h-9 rounded-xl bg-zinc-200/55 dark:bg-zinc-900 hover:bg-emerald-600/10 hover:text-emerald-400 border border-zinc-300 dark:border-zinc-800 flex items-center justify-center transition-all shadow-inner"
+                  className="w-9 h-9 rounded-xl bg-zinc-850 dark:bg-zinc-900 text-zinc-550 dark:text-zinc-400 hover:text-emerald-500 hover:bg-emerald-500/10 dark:hover:bg-emerald-500/10 border border-zinc-800/40 dark:border-zinc-800 flex items-center justify-center transition-all shadow-inner"
                 >
-                  <MessagesSquare className="w-4 h-4 text-emerald-400" />
+                  <MessagesSquare className="w-4 h-4" />
                 </a>
               )}
               {siteConfig.socialBale && (
@@ -1688,9 +1740,9 @@ export default function Home() {
                   target="_blank" 
                   rel="noreferrer"
                   title="پیام‌رسان بله"
-                  className="w-9 h-9 rounded-xl bg-zinc-200/55 dark:bg-zinc-900 hover:bg-green-600/10 hover:text-green-400 border border-zinc-300 dark:border-zinc-800 flex items-center justify-center transition-all shadow-inner"
+                  className="w-9 h-9 rounded-xl bg-zinc-850 dark:bg-zinc-900 text-zinc-550 dark:text-zinc-400 hover:text-green-500 hover:bg-green-500/10 dark:hover:bg-green-500/10 border border-zinc-800/40 dark:border-zinc-800 flex items-center justify-center transition-all shadow-inner"
                 >
-                  <MessagesSquare className="w-4 h-4 text-green-400" />
+                  <MessagesSquare className="w-4 h-4" />
                 </a>
               )}
               {siteConfig.socialX && (
@@ -1699,9 +1751,9 @@ export default function Home() {
                   target="_blank" 
                   rel="noreferrer"
                   title="صفحه X (توئیتر)"
-                  className="w-9 h-9 rounded-xl bg-zinc-200/55 dark:bg-zinc-900 hover:bg-zinc-600/10 hover:text-zinc-400 border border-zinc-300 dark:border-zinc-800 flex items-center justify-center transition-all shadow-inner"
+                  className="w-9 h-9 rounded-xl bg-zinc-850 dark:bg-zinc-900 text-zinc-550 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-800/10 dark:hover:bg-zinc-800/50 border border-zinc-800/40 dark:border-zinc-800 flex items-center justify-center transition-all shadow-inner"
                 >
-                  <Twitter className="w-4 h-4 text-zinc-400" />
+                  <Twitter className="w-4 h-4" />
                 </a>
               )}
             </div>
@@ -1757,7 +1809,7 @@ export default function Home() {
         {/* Outer bottom copyright rail */}
         <div className="border-t border-zinc-200/30 dark:border-zinc-900 bg-zinc-250/10 dark:bg-zinc-950/80 py-4 text-center">
           <p className="text-[10px] text-zinc-400">
-            تمامی حقوق مادی و معنوی محفوظ و متعلق به دیجیتال استور می‌باشد © {new Date().getFullYear()}
+            {siteConfig.footerCopy || `تمامی حقوق مادی و معنوی محفوظ و متعلق به ${siteConfig.siteName || 'دیجیتال استور'} می‌باشد © ${new Date().getFullYear()}`}
           </p>
         </div>
       </footer>

@@ -44,7 +44,26 @@ export default function Admin() {
     onlinePaymentUrl: '',
     cardNo: '',
     cardHolder: '',
-    cardBank: ''
+    cardBank: '',
+    onlinePaymentEnabled: true,
+    cardPaymentEnabled: true,
+    siteName: '',
+    heroTitle: '',
+    heroSubtitle: '',
+    servicesTitle: '',
+    servicesSubtitle: '',
+    deliveryTitle: '',
+    deliveryDesc: '',
+    supportTitle: '',
+    supportDesc: '',
+    paymentTitle: '',
+    paymentDesc: '',
+    footerCopy: '',
+    enableHeroSection: true,
+    enableFeaturesSection: true,
+    enableProductsSection: true,
+    enableStatsSection: true,
+    enableVideoBackground: true,
   });
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -1298,6 +1317,37 @@ export default function Admin() {
                   <Coins className="w-5 h-5 text-indigo-400" />
                   تنظیمات درگاه پرداخت و کارت به کارت
                 </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 pb-6 border-b border-zinc-800">
+                  <div className="flex items-center justify-between bg-zinc-950/40 p-4 rounded-xl border border-zinc-900">
+                    <div>
+                      <span className="text-sm font-bold text-zinc-200 block">درگاه پرداخت آنلاین (زرین‌پال)</span>
+                      <span className="text-[11px] text-zinc-500 block">فعال بودن گزینه پرداخت و شارژ مستقیم از درگاه بانکی</span>
+                    </div>
+                    <button 
+                      type="button"
+                      onClick={() => setAdminSettings({...adminSettings, onlinePaymentEnabled: !adminSettings.onlinePaymentEnabled})}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer ${adminSettings.onlinePaymentEnabled ? 'bg-indigo-500' : 'bg-zinc-700'}`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${adminSettings.onlinePaymentEnabled ? 'translate-x-1' : 'translate-x-6'}`} />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between bg-zinc-950/40 p-4 rounded-xl border border-zinc-900">
+                    <div>
+                      <span className="text-sm font-bold text-zinc-200 block">پرداخت کارت به کارت</span>
+                      <span className="text-[11px] text-zinc-500 block">فعال بودن گزینه واریز به شماره کارت و ارسال تصویر رسید</span>
+                    </div>
+                    <button 
+                      type="button"
+                      onClick={() => setAdminSettings({...adminSettings, cardPaymentEnabled: !adminSettings.cardPaymentEnabled})}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer ${adminSettings.cardPaymentEnabled ? 'bg-indigo-500' : 'bg-zinc-700'}`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${adminSettings.cardPaymentEnabled ? 'translate-x-1' : 'translate-x-6'}`} />
+                    </button>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium text-zinc-300 block mb-2">لینک مستقیم درگاه خرید آنلاین (مانند زرین‌پال)</label>
@@ -1615,6 +1665,209 @@ export default function Admin() {
                     </div>
                   </div>
                </div>
+
+                {/* Word-by-Word Text and Section Visibility Editor */}
+                <div className="glass-panel p-6 border border-zinc-805/40 bg-zinc-900/30 rounded-2xl mb-6 space-y-6 text-right">
+                  <h3 className="font-bold text-lg text-white flex items-center gap-2 font-sans pb-3 border-b border-zinc-800/80">
+                    <Sparkles className="w-5 h-5 text-amber-400" />
+                    تنظیمات پیشرفته متون لندینگ‌پیج و دسترسی بخش‌ها (کلمه به کلمه)
+                  </h3>
+
+                  {/* Section Toggles */}
+                  <div className="bg-zinc-950/60 p-4 rounded-xl border border-zinc-900/80 space-y-4">
+                    <h4 className="text-xs font-bold text-zinc-400 mb-2">فعال/غیرفعال‌سازی بخش‌های صفحه اصلی (Toggles)</h4>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="flex items-center justify-between p-2.5 bg-zinc-900/40 rounded-lg border border-zinc-800/30">
+                        <span className="text-xs text-zinc-300">نمایش بخش هیرو (بنر و ویدیو بالا)</span>
+                        <button 
+                          type="button"
+                          onClick={() => setAdminSettings({...adminSettings, enableHeroSection: !adminSettings.enableHeroSection})}
+                          className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors cursor-pointer ${adminSettings.enableHeroSection !== false ? 'bg-indigo-500' : 'bg-zinc-700'}`}
+                        >
+                          <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${adminSettings.enableHeroSection !== false ? 'translate-x-1' : 'translate-x-6'}`} />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between p-2.5 bg-zinc-900/40 rounded-lg border border-zinc-800/30">
+                        <span className="text-xs text-zinc-300">نمایش بخش ویژگی‌ها (کارت‌های ۳گانه)</span>
+                        <button 
+                          type="button"
+                          onClick={() => setAdminSettings({...adminSettings, enableFeaturesSection: !adminSettings.enableFeaturesSection})}
+                          className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors cursor-pointer ${adminSettings.enableFeaturesSection !== false ? 'bg-indigo-500' : 'bg-zinc-700'}`}
+                        >
+                          <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${adminSettings.enableFeaturesSection !== false ? 'translate-x-1' : 'translate-x-6'}`} />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between p-2.5 bg-zinc-900/40 rounded-lg border border-zinc-800/30">
+                        <span className="text-xs text-zinc-300">نمایش بخش دسته‌بندی و محصولات</span>
+                        <button 
+                          type="button"
+                          onClick={() => setAdminSettings({...adminSettings, enableProductsSection: !adminSettings.enableProductsSection})}
+                          className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors cursor-pointer ${adminSettings.enableProductsSection !== false ? 'bg-indigo-500' : 'bg-zinc-700'}`}
+                        >
+                          <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${adminSettings.enableProductsSection !== false ? 'translate-x-1' : 'translate-x-6'}`} />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between p-2.5 bg-zinc-900/40 rounded-lg border border-zinc-800/30">
+                        <span className="text-xs text-zinc-300">نمایش بخش آمارها و ارقام کارنامه</span>
+                        <button 
+                          type="button"
+                          onClick={() => setAdminSettings({...adminSettings, enableStatsSection: !adminSettings.enableStatsSection})}
+                          className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors cursor-pointer ${adminSettings.enableStatsSection !== false ? 'bg-indigo-500' : 'bg-zinc-700'}`}
+                        >
+                          <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${adminSettings.enableStatsSection !== false ? 'translate-x-1' : 'translate-x-6'}`} />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between p-2.5 bg-zinc-900/40 rounded-lg sm:col-span-2 border border-zinc-800/30">
+                        <span className="text-xs text-zinc-300">پخش زنده ویدیو پس‌زمینه در بنر بالایی (در غیر اینصورت عکس ثابت نمایش داده می‌شود)</span>
+                        <button 
+                          type="button"
+                          onClick={() => setAdminSettings({...adminSettings, enableVideoBackground: !adminSettings.enableVideoBackground})}
+                          className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors cursor-pointer ${adminSettings.enableVideoBackground !== false ? 'bg-indigo-500' : 'bg-zinc-700'}`}
+                        >
+                          <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${adminSettings.enableVideoBackground !== false ? 'translate-x-1' : 'translate-x-6'}`} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Text Settings Form */}
+                  <div className="space-y-4 border-t border-zinc-800/60 pt-4">
+                    <h4 className="text-xs font-bold text-zinc-400">ویرایش متون و تایتل‌ها کلمه به کلمه</h4>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-right">
+                      <div>
+                        <label className="text-xs font-medium text-zinc-300 block mb-1.5">عنوان وبسایت (در هدر و تب مرورگر):</label>
+                        <input 
+                          type="text"
+                          value={adminSettings.siteName || ''}
+                          onChange={e => setAdminSettings({...adminSettings, siteName: e.target.value})}
+                          placeholder="دیجیتال استور"
+                          className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2 text-white outline-none focus:border-indigo-500 text-xs"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-medium text-zinc-300 block mb-1.5">تیتر اصلی بخش هیرو (بنر بالا):</label>
+                        <input 
+                          type="text"
+                          value={adminSettings.heroTitle || ''}
+                          onChange={e => setAdminSettings({...adminSettings, heroTitle: e.target.value})}
+                          placeholder="مرجع تخصصی خرید اشتراک هوش مصنوعی"
+                          className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2 text-white outline-none focus:border-indigo-500 text-xs"
+                        />
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="text-xs font-medium text-zinc-300 block mb-1.5">توضیح زیرین بخش هیرو (زیرنویس هیرو):</label>
+                        <textarea 
+                          rows={2}
+                          value={adminSettings.heroSubtitle || ''}
+                          onChange={e => setAdminSettings({...adminSettings, heroSubtitle: e.target.value})}
+                          placeholder="توضیحات کوتاه..."
+                          className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2 text-white outline-none focus:border-indigo-500 text-xs"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-medium text-zinc-300 block mb-1.5">تیتر بخش دسته‌بندی و محصولات:</label>
+                        <input 
+                          type="text"
+                          value={adminSettings.servicesTitle || ''}
+                          onChange={e => setAdminSettings({...adminSettings, servicesTitle: e.target.value})}
+                          placeholder="خدمات نوین و محصولات دیجیتال"
+                          className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2 text-white outline-none focus:border-indigo-500 text-xs"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-medium text-zinc-300 block mb-1.5">زیرنویس بخش دسته‌بندی و محصولات:</label>
+                        <input 
+                          type="text"
+                          value={adminSettings.servicesSubtitle || ''}
+                          onChange={e => setAdminSettings({...adminSettings, servicesSubtitle: e.target.value})}
+                          placeholder="بهترین و باکیفیت‌ترین سرویس‌های پریمیوم"
+                          className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2 text-white outline-none focus:border-indigo-500 text-xs"
+                        />
+                      </div>
+
+                      {/* Triple Feature Cards customization */}
+                      <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-zinc-800/60 pt-4">
+                        {/* Feature 1 */}
+                        <div className="space-y-2 bg-zinc-950/20 p-3 rounded-xl border border-zinc-800/40">
+                          <span className="text-[10px] font-bold text-indigo-400 block mb-1">ویژگی اول (تحویل آنی)</span>
+                          <input 
+                            type="text"
+                            value={adminSettings.deliveryTitle || ''}
+                            onChange={e => setAdminSettings({...adminSettings, deliveryTitle: e.target.value})}
+                            placeholder="تیتر..."
+                            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-1.5 text-white outline-none focus:border-indigo-500 text-xs"
+                          />
+                          <textarea 
+                            rows={2}
+                            value={adminSettings.deliveryDesc || ''}
+                            onChange={e => setAdminSettings({...adminSettings, deliveryDesc: e.target.value})}
+                            placeholder="توضیح..."
+                            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-1.5 text-white outline-none focus:border-indigo-500 text-xs"
+                          />
+                        </div>
+
+                        {/* Feature 2 */}
+                        <div className="space-y-2 bg-zinc-950/20 p-3 rounded-xl border border-zinc-800/40">
+                          <span className="text-[10px] font-bold text-indigo-400 block mb-1">ویژگی دوم (پشتیبانی ۲۴ ساعته)</span>
+                          <input 
+                            type="text"
+                            value={adminSettings.supportTitle || ''}
+                            onChange={e => setAdminSettings({...adminSettings, supportTitle: e.target.value})}
+                            placeholder="تیتر..."
+                            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-1.5 text-white outline-none focus:border-indigo-500 text-xs"
+                          />
+                          <textarea 
+                            rows={2}
+                            value={adminSettings.supportDesc || ''}
+                            onChange={e => setAdminSettings({...adminSettings, supportDesc: e.target.value})}
+                            placeholder="توضیح..."
+                            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-1.5 text-white outline-none focus:border-indigo-500 text-xs"
+                          />
+                        </div>
+
+                        {/* Feature 3 */}
+                        <div className="space-y-2 bg-zinc-950/20 p-3 rounded-xl border border-zinc-800/40">
+                          <span className="text-[10px] font-bold text-indigo-400 block mb-1">ویژگی سوم (پرداخت امن)</span>
+                          <input 
+                            type="text"
+                            value={adminSettings.paymentTitle || ''}
+                            onChange={e => setAdminSettings({...adminSettings, paymentTitle: e.target.value})}
+                            placeholder="تیتر..."
+                            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-1.5 text-white outline-none focus:border-indigo-500 text-xs"
+                          />
+                          <textarea 
+                            rows={2}
+                            value={adminSettings.paymentDesc || ''}
+                            onChange={e => setAdminSettings({...adminSettings, paymentDesc: e.target.value})}
+                            placeholder="توضیح..."
+                            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-1.5 text-white outline-none focus:border-indigo-500 text-xs"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="text-xs font-medium text-zinc-300 block mb-1.5">متن قانون کپی‌رایت فوتر (Footer Copyright Text):</label>
+                        <input 
+                          type="text"
+                          value={adminSettings.footerCopy || ''}
+                          onChange={e => setAdminSettings({...adminSettings, footerCopy: e.target.value})}
+                          placeholder="کپی‌رایت فوتر..."
+                          className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2 text-white outline-none focus:border-indigo-500 text-xs"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
 <button onClick={handleSaveSettings} className="bg-indigo-500 hover:bg-indigo-600 px-6 py-3 rounded-xl font-bold transition-all shadow-md shadow-indigo-500/10 cursor-pointer">
                  ذخیره قطعی تمامی تنظیمات

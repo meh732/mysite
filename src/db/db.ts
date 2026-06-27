@@ -44,6 +44,23 @@ export interface Settings {
   siteLogoUrl: string;
   onlinePaymentEnabled: boolean;
   cardPaymentEnabled: boolean;
+  siteName?: string;
+  heroTitle?: string;
+  heroSubtitle?: string;
+  servicesTitle?: string;
+  servicesSubtitle?: string;
+  deliveryTitle?: string;
+  deliveryDesc?: string;
+  supportTitle?: string;
+  supportDesc?: string;
+  paymentTitle?: string;
+  paymentDesc?: string;
+  footerCopy?: string;
+  enableHeroSection?: boolean;
+  enableFeaturesSection?: boolean;
+  enableProductsSection?: boolean;
+  enableStatsSection?: boolean;
+  enableVideoBackground?: boolean;
 }
 
 // --- Initial State ---
@@ -108,7 +125,24 @@ export let settings: Settings = {
   cardBank: 'بانک ملی ایران',
   siteLogoUrl: '',
   onlinePaymentEnabled: true,
-  cardPaymentEnabled: true
+  cardPaymentEnabled: true,
+  siteName: 'دیجیتال استور',
+  heroTitle: 'مرجع تخصصی خرید اشتراک هوش مصنوعی و خدمات نوین دیجیتال',
+  heroSubtitle: 'با ما، آینده همین امروز در دستان شماست. تحویل آنی و پشتیبانی ۲۴ ساعته واقعی.',
+  servicesTitle: 'خدمات نوین و محصولات دیجیتال',
+  servicesSubtitle: 'بهترین و باکیفیت‌ترین سرویس‌های پریمیوم را با خیال راحت تهیه کنید',
+  deliveryTitle: 'تحویل آنی و مطمئن',
+  deliveryDesc: 'تمام محصولات اکانت بلافاصله پس از پرداخت تحویل داده خواهند شد.',
+  supportTitle: 'پشتیبانی ۲۴/۷ واقعی',
+  supportDesc: 'پشتیبانی کامل و پاسخگویی به تمام تیکت‌ها و مشکلات شما در سریع‌ترین زمان ممکن.',
+  paymentTitle: 'پرداخت امن و سریع',
+  paymentDesc: 'پرداخت آنلاین از طریق درگاه‌های معتبر یا واریز مستقیم کارت به کارت با امکان ثبت رسید.',
+  footerCopy: 'تمامی حقوق مادی و معنوی محفوظ است. توسعه داده شده برای تجارت مدرن شما.',
+  enableHeroSection: true,
+  enableFeaturesSection: true,
+  enableProductsSection: true,
+  enableStatsSection: true,
+  enableVideoBackground: true
 };
 
 export const otps: Record<string, string> = {};
@@ -150,13 +184,43 @@ export function saveDatabase() {
 
 // Utility functions
 export function formatPriceToman(val: string | number): string {
-  if (!val) return '۰ تومان';
-  const str = String(val);
-  const normalized = str.replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
+  if (val === undefined || val === null || val === '') return '۰ تومان';
+  let str = String(val).trim();
+  
+  const persianDigits = '۰۱۲۳۴۵۶۷۸۹';
+  const arabicDigits = '٠١٢٣٤٥٦٧٨٩';
+  
+  let normalized = '';
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    const pIdx = persianDigits.indexOf(char);
+    const aIdx = arabicDigits.indexOf(char);
+    if (pIdx !== -1) {
+      normalized += pIdx.toString();
+    } else if (aIdx !== -1) {
+      normalized += aIdx.toString();
+    } else {
+      normalized += char;
+    }
+  }
+  
   const cleanNumStr = normalized.replace(/[^\d]/g, '');
-  if (!cleanNumStr) return str;
+  if (!cleanNumStr) return '۰ تومان';
+  
   const num = parseInt(cleanNumStr, 10);
-  return `${num.toLocaleString('fa-IR')} تومان`;
+  const englishFormatted = num.toLocaleString('en-US');
+  
+  let result = '';
+  for (let i = 0; i < englishFormatted.length; i++) {
+    const char = englishFormatted[i];
+    if (char >= '0' && char <= '9') {
+      result += persianDigits[parseInt(char, 10)];
+    } else {
+      result += char;
+    }
+  }
+  
+  return `${result} تومان`;
 }
 
 export function parsePrice(priceStr: string | number): number {

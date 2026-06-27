@@ -496,10 +496,23 @@ export async function handleBotUpdate(platform: 'telegram' | 'bale', update: any
       `💰 موجودی فعلی: **${balance.toLocaleString('fa-IR')} تومان**\n\n` +
       `💡 جهت شارژ کیف پول، روش مورد نظر خود را انتخاب نمایید:`;
 
-    const topupButtons = [
-      [{ text: `💳 شارژ آنلاین (درگاه)`, callback_data: `start_topup_online` }],
-      [{ text: `🏦 شارژ کارت به کارت`, callback_data: `start_topup_card` }]
-    ];
+    const topupButtons: any[] = [];
+    if (settings.onlinePaymentEnabled && settings.onlinePaymentUrl) {
+      topupButtons.push([{ text: `💳 شارژ آنلاین (درگاه زرین‌پال)`, callback_data: `start_topup_online` }]);
+    }
+    if (settings.cardPaymentEnabled) {
+      topupButtons.push([{ text: `🏦 شارژ کارت به کارت (واریز دستی)`, callback_data: `start_topup_card` }]);
+    }
+
+    if (topupButtons.length === 0) {
+      await reply(
+        `💳 **بخش مدیریت مالی و کیف پول شما** 💳\n\n` +
+        `👤 حساب کاربری: **${userMap.phone}**\n` +
+        `💰 موجودی فعلی: **${balance.toLocaleString('fa-IR')} تومان**\n\n` +
+        `⚠️ تمامی روش‌های افزایش اعتبار کیف پول موقتاً توسط مدیریت غیرفعال شده‌اند.`
+      );
+      return;
+    }
     
     await reply(walletText, { inline_keyboard: topupButtons });
     return;
@@ -581,6 +594,17 @@ export async function handleBotUpdate(platform: 'telegram' | 'bale', update: any
 
   if (text === 'start_topup_online' || text === 'start_topup_card') {
     const type = text === 'start_topup_online' ? 'online' : 'card';
+    if (type === 'online') {
+      if (!settings.onlinePaymentEnabled || !settings.onlinePaymentUrl) {
+        await reply(`⚠️ روش پرداخت آنلاین غیرفعال است یا آدرس درگاه در تنظیمات توسط مدیریت تعریف نشده است.`);
+        return;
+      }
+    } else {
+      if (!settings.cardPaymentEnabled) {
+        await reply(`⚠️ روش پرداخت کارت به کارت موقتاً توسط مدیریت غیرفعال شده است.`);
+        return;
+      }
+    }
     userCheckoutStates[chat.id] = { pendingTopupType: type };
     await reply(`لطفاً مبلغ مورد نظر خود را به تومان وارد کنید:`);
     return;

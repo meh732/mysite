@@ -41,39 +41,39 @@ export default function ThemeSwitcher() {
   }, [theme]);
 
   return (
-    <div className="flex bg-zinc-900/80 border border-zinc-800 p-1.5 rounded-full items-center gap-1">
+    <div className="flex bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-1 rounded-full items-center gap-1 shadow-sm transition-all">
       <button
         onClick={() => setTheme('light')}
         title="حالت روشن"
-        className={`p-2 rounded-full transition-all cursor-pointer ${
+        className={`p-1.5 rounded-full transition-all cursor-pointer ${
           theme === 'light'
-            ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
-            : 'text-zinc-500 hover:text-zinc-300'
+            ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shadow-sm'
+            : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300'
         }`}
       >
-        <Sun className="w-4 h-4" />
+        <Sun className="w-3.5 h-3.5" />
       </button>
       <button
         onClick={() => setTheme('dark')}
         title="حالت تاریک"
-        className={`p-2 rounded-full transition-all cursor-pointer ${
+        className={`p-1.5 rounded-full transition-all cursor-pointer ${
           theme === 'dark'
-            ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
-            : 'text-zinc-500 hover:text-zinc-300'
+            ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 shadow-sm'
+            : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300'
         }`}
       >
-        <Moon className="w-4 h-4" />
+        <Moon className="w-3.5 h-3.5" />
       </button>
       <button
         onClick={() => setTheme('system')}
         title="منطبق با سیستم"
-        className={`p-2 rounded-full transition-all cursor-pointer ${
+        className={`p-1.5 rounded-full transition-all cursor-pointer ${
           theme === 'system'
-            ? 'bg-sky-500/10 text-sky-400 border border-sky-500/20'
-            : 'text-zinc-500 hover:text-zinc-300'
+            ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 shadow-sm'
+            : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300'
         }`}
       >
-        <Monitor className="w-4 h-4" />
+        <Monitor className="w-3.5 h-3.5" />
       </button>
     </div>
   );
