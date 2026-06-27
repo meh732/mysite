@@ -2,7 +2,7 @@ import {
   settings, products, orders, users, transactions, botUsers, chats, saveDatabase, 
   adminModeOverride, userCheckoutStates, otps, formatPriceToman, parsePrice 
 } from '../db/db';
-import { botRequest, isUserMemberOfChannel, sendBotDocument } from './botService';
+import { botRequest, isUserMemberOfChannel, sendBotDocument, sendBotPhotoBase64 } from './botService';
 
 export async function handleBotUpdate(platform: 'telegram' | 'bale', update: any) {
   let isCallback = false;
@@ -461,19 +461,30 @@ export async function handleBotUpdate(platform: 'telegram' | 'bale', update: any
       delete userCheckoutStates[chat.id].pendingTopupAmount;
     }
 
+    // Resolve file URL path for either Telegram or Bale
     let fileUrlPath = '';
-    if (platform === 'telegram' && settings.telegramToken) {
-      try {
-        const getFileRes = await botRequest('https://api.telegram.org', settings.telegramToken, 'getFile', { file_id: fileId });
-        if (getFileRes && getFileRes.ok && getFileRes.result && getFileRes.result.file_path) {
-          fileUrlPath = getFileRes.result.file_path;
-        }
-      } catch (e) {
-        console.error('Error getting telegram file_path:', e);
+    const apiHostBase = platform === 'telegram' ? 'https://api.telegram.org' : 'https://tapi.bale.ai';
+    const currentToken = platform === 'telegram' ? settings.telegramToken : settings.baleToken;
+    try {
+      const getFileRes = await botRequest(apiHostBase, currentToken, 'getFile', { file_id: fileId });
+      if (getFileRes && getFileRes.ok && getFileRes.result && getFileRes.result.file_path) {
+        fileUrlPath = getFileRes.result.file_path;
+      }
+    } catch (e) {
+      console.error(`Error getting ${platform} file_path:`, e);
+    }
+
+    // Create absolute downloadable photo URL
+    let photoUrl = '';
+    if (fileUrlPath) {
+      if (platform === 'telegram') {
+        photoUrl = `https://api.telegram.org/file/bot${settings.telegramToken}/${fileUrlPath}`;
+      } else {
+        photoUrl = `https://tapi.bale.ai/file/bot${settings.baleToken}/${fileUrlPath}`;
       }
     }
 
-    const receiptImageValue = fileUrlPath || `file_id_${fileId}`;
+    const receiptImageValue = photoUrl || fileUrlPath || `file_id_${fileId}`;
 
     const newTrans = {
       id: 3000 + transactions.length + 1,
@@ -496,7 +507,11 @@ export async function handleBotUpdate(platform: 'telegram' | 'bale', update: any
       getUserKeyboard(isAdmin)
     );
     
-    const adminMsg = `📸 **رسید بانکی تصویری جدید از بات ${platformName}!**\n\n👤 فرستنده (تلفن): ${userMap.phone}\n💰 مبلغ درخواستی: ${reqAmount > 0 ? reqAmount.toLocaleString('fa-IR') + ' تومان' : 'نامشخص'}\n🆔 شناسه تراکنش: #${newTrans.id}\n\nجهت بررسی و تایید/رد تراکنش می‌توانید از دکمه‌های زیر استفاده کنید یا به پنل وب‌سایت مراجعه نمایید.`;
+    const adminMsg = `📸 **رسید بانکی تصویری جدید از بات ${platformName}!**\n\n` +
+      `👤 فرستنده (تلفن): ${userMap.phone}\n` +
+      `💰 مبلغ درخواستی: ${reqAmount > 0 ? reqAmount.toLocaleString('fa-IR') + ' تومان' : 'نامشخص'}\n` +
+      `🆔 شناسه تراکنش: #${newTrans.id}\n\n` +
+      `جهت بررسی و تایید/رد تراکنش می‌توانید از دکمه‌های زیر استفاده کنید یا به پنل وب‌سایت مراجعه نمایید.`;
     
     const adminInlineKeyboard = [
       [
@@ -505,23 +520,137 @@ export async function handleBotUpdate(platform: 'telegram' | 'bale', update: any
       ]
     ];
 
+    // --- Resilient Delivery to Telegram Admin ---
     if (settings.adminTelegramChatId && settings.telegramToken) {
-      await botRequest('https://api.telegram.org', settings.telegramToken, 'sendPhoto', { 
-        chat_id: settings.adminTelegramChatId, 
-        photo: fileId,
-        caption: adminMsg,
-        parse_mode: 'Markdown',
-        reply_markup: { inline_keyboard: adminInlineKeyboard } 
-      });
+      let sent = false;
+
+      // Stage 1: Try Native File ID (Fastest, same network)
+      if (platform === 'telegram') {
+        try {
+          const res = await botRequest('https://api.telegram.org', settings.telegramToken, 'sendPhoto', { 
+            chat_id: settings.adminTelegramChatId, 
+            photo: fileId,
+            caption: adminMsg,
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: adminInlineKeyboard } 
+          });
+          if (res && res.ok) sent = true;
+        } catch (e) {
+          console.error('Telegram Native sendPhoto failed:', e);
+        }
+      }
+
+      // Stage 2: Try Direct HTTP URL (Cross network or fallback)
+      if (!sent && photoUrl) {
+        try {
+          const res = await botRequest('https://api.telegram.org', settings.telegramToken, 'sendPhoto', { 
+            chat_id: settings.adminTelegramChatId, 
+            photo: photoUrl,
+            caption: adminMsg,
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: adminInlineKeyboard } 
+          });
+          if (res && res.ok) sent = true;
+        } catch (e) {
+          console.error('Telegram PhotoUrl sendPhoto failed:', e);
+        }
+      }
+
+      // Stage 3: Download & Send via Base64 Upload
+      if (!sent && photoUrl) {
+        try {
+          const imgRes = await fetch(photoUrl);
+          if (imgRes.ok) {
+            const arrBuffer = await imgRes.arrayBuffer();
+            const base64Data = `data:image/jpeg;base64,${Buffer.from(arrBuffer).toString('base64')}`;
+            const res = await sendBotPhotoBase64('https://api.telegram.org', settings.telegramToken, settings.adminTelegramChatId, adminMsg, base64Data, adminInlineKeyboard);
+            if (res && res.ok) sent = true;
+          }
+        } catch (e) {
+          console.error('Telegram Base64 sendPhoto failed:', e);
+        }
+      }
+
+      // Stage 4: Ultimate text fallback with link & buttons
+      if (!sent) {
+        try {
+          const textMsg = adminMsg + (photoUrl ? `\n\n🔗 [مشاهده تصویر فیش واریزی](${photoUrl})` : '');
+          await botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', { 
+            chat_id: settings.adminTelegramChatId, 
+            text: textMsg,
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: adminInlineKeyboard } 
+          });
+        } catch (e) {
+          console.error('Telegram ultimate text fallback failed:', e);
+        }
+      }
     }
+
+    // --- Resilient Delivery to Bale Admin ---
     if (settings.adminBaleChatId && settings.baleToken) {
-      await botRequest('https://tapi.bale.ai', settings.baleToken, 'sendPhoto', { 
-        chat_id: settings.adminBaleChatId, 
-        photo: fileId, 
-        caption: adminMsg,
-        reply_markup: { inline_keyboard: adminInlineKeyboard }
-      });
+      let sent = false;
+
+      // Stage 1: Try Native File ID (Fastest, same network)
+      if (platform === 'bale') {
+        try {
+          const res = await botRequest('https://tapi.bale.ai', settings.baleToken, 'sendPhoto', { 
+            chat_id: settings.adminBaleChatId, 
+            photo: fileId,
+            caption: adminMsg,
+            reply_markup: { inline_keyboard: adminInlineKeyboard } 
+          });
+          if (res && res.ok) sent = true;
+        } catch (e) {
+          console.error('Bale Native sendPhoto failed:', e);
+        }
+      }
+
+      // Stage 2: Try Direct HTTP URL (Cross network or fallback)
+      if (!sent && photoUrl) {
+        try {
+          const res = await botRequest('https://tapi.bale.ai', settings.baleToken, 'sendPhoto', { 
+            chat_id: settings.adminBaleChatId, 
+            photo: photoUrl,
+            caption: adminMsg,
+            reply_markup: { inline_keyboard: adminInlineKeyboard } 
+          });
+          if (res && res.ok) sent = true;
+        } catch (e) {
+          console.error('Bale PhotoUrl sendPhoto failed:', e);
+        }
+      }
+
+      // Stage 3: Download & Send via Base64 Upload
+      if (!sent && photoUrl) {
+        try {
+          const imgRes = await fetch(photoUrl);
+          if (imgRes.ok) {
+            const arrBuffer = await imgRes.arrayBuffer();
+            const base64Data = `data:image/jpeg;base64,${Buffer.from(arrBuffer).toString('base64')}`;
+            const res = await sendBotPhotoBase64('https://tapi.bale.ai', settings.baleToken, settings.adminBaleChatId, adminMsg, base64Data, adminInlineKeyboard);
+            if (res && res.ok) sent = true;
+          }
+        } catch (e) {
+          console.error('Bale Base64 sendPhoto failed:', e);
+        }
+      }
+
+      // Stage 4: Ultimate text fallback with link & buttons
+      if (!sent) {
+        try {
+          const textMsg = adminMsg + (photoUrl ? `\n\n🔗 [مشاهده تصویر فیش واریزی](${photoUrl})` : '');
+          await botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', { 
+            chat_id: settings.adminBaleChatId, 
+            text: textMsg,
+            reply_markup: { inline_keyboard: adminInlineKeyboard } 
+          });
+        } catch (e) {
+          console.error('Bale ultimate text fallback failed:', e);
+        }
+      }
     }
+
     return;
   }
 
