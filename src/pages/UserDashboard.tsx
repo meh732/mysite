@@ -199,7 +199,8 @@ export default function UserDashboard() {
         userIdentifier,
         amount: amt,
         method: topupMethod,
-        cardHolderName: cardHolder || (topupMethod === 'online' ? 'آنلاین شتاب' : 'نامشخص')
+        cardHolderName: cardHolder || (topupMethod === 'online' ? 'آنلاین شتاب' : 'نامشخص'),
+        receiptImage: receiptImage // Pass the Base64 image
       })
     })
       .then(res => res.json())
@@ -211,11 +212,12 @@ export default function UserDashboard() {
               window.open(adminSettings.onlinePaymentUrl, '_blank');
             }
           } else {
-            setWalletSuccessMsg(`درخواست کارت به کارت شما به مبلغ ${amt.toLocaleString('fa-IR')} تومان ثبت شد. لطفاً تصویر رسید خود را در بخش پشتیبانی ارسال نمایید تا پس از تایید مدیریت، حساب شما شارژ گردد.`);
+            setWalletSuccessMsg(`درخواست کارت به کارت شما به مبلغ ${amt.toLocaleString('fa-IR')} تومان همراه با فیش واریزی با موفقیت ثبت شد و در انتظار تایید مدیریت است.`);
           }
           setProfile(prev => ({ ...prev, walletBalance: data.walletBalance }));
           setTransactions(prev => [data.transaction, ...prev]);
           setCardHolder('');
+          setReceiptImage('');
         } else {
           alert(data.message || 'خطا در افزایش اعتبار');
         }
@@ -880,6 +882,36 @@ export default function UserDashboard() {
                              />
                            </div>
                          </div>
+
+                          {topupMethod === 'card' && (
+                            <div className="mt-3">
+                              <label className="block text-[10px] text-zinc-500 mb-1.5">تصویر فیش/رسید واریزی:</label>
+                              <div className="flex flex-col items-center justify-center border border-dashed border-zinc-800 rounded-xl p-4 bg-zinc-950/20 hover:bg-zinc-950/40 transition-all">
+                                <input 
+                                  type="file" 
+                                  accept="image/*" 
+                                  required
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      const reader = new FileReader();
+                                      reader.onloadend = () => {
+                                        setReceiptImage(reader.result as string);
+                                      };
+                                      reader.readAsDataURL(file);
+                                    } 
+                                  }}
+                                  className="text-xs text-zinc-400 file:mr-4 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-600/10 file:text-indigo-400 hover:file:bg-indigo-600/20 file:cursor-pointer cursor-pointer w-full"
+                                />
+                                {receiptImage && (
+                                  <div className="mt-3 w-full flex items-center justify-between bg-zinc-900/50 p-2 rounded-lg border border-zinc-800">
+                                    <span className="text-[10px] text-emerald-400">✅ تصویر رسید آماده ارسال است</span>
+                                    <img src={receiptImage} alt="رسید" className="w-10 h-10 object-cover rounded-md border border-zinc-700" referrerPolicy="no-referrer" />
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
 
                          <button 
                            type="submit" 

@@ -145,6 +145,32 @@ export async function handleBotUpdate(platform: 'telegram' | 'bale', update: any
 
   // --- ADMIN COMMANDS INTERFACE ---
   if (isAdmin && currentMode === 'admin') {
+    // Check if waiting for rejection reason
+    if (userCheckoutStates[chat.id] && userCheckoutStates[chat.id].waitingForRejectReasonTransId) {
+      const transId = userCheckoutStates[chat.id].waitingForRejectReasonTransId;
+      const trans = transactions.find(t => t.id === transId);
+      if (trans && trans.status === 'pending') {
+        const reason = text || 'توسط مدیریت رد شد';
+        trans.status = 'rejected';
+        trans.description = trans.description + ` | علت رد: ${reason}`;
+        saveDatabase();
+        
+        delete userCheckoutStates[chat.id];
+        await reply(`❌ درخواست تراکنش #${transId} با موفقیت رد شد و علت رد برای کاربر ارسال شد.`);
+        
+        const botUser = botUsers.find(b => b.phone === trans.userIdentifier);
+        if (botUser) {
+          const userMsg = `❌ **فیش واریزی شما رد شد!**\n\n💰 مبلغ: ${trans.amount.toLocaleString('fa-IR')} تومان\n📝 علت رد درخواست: ${reason}`;
+          if (botUser.telegramChatId && settings.telegramToken) botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', { chat_id: botUser.telegramChatId, text: userMsg });
+          if (botUser.baleChatId && settings.baleToken) botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', { chat_id: botUser.baleChatId, text: userMsg });
+        }
+      } else {
+        delete userCheckoutStates[chat.id];
+        await reply(`⚠️ تراکنش #${transId} معتبر یا در حالت انتظار نیست.`);
+      }
+      return;
+    }
+
     if (text === '/start' || text.toLowerCase() === 'سلام' || text === '⚙️ برگشت به پنل مدیریت') {
       adminModeOverride[chat.id] = 'admin'; // ensure reset
       await reply(
@@ -435,6 +461,20 @@ export async function handleBotUpdate(platform: 'telegram' | 'bale', update: any
       delete userCheckoutStates[chat.id].pendingTopupAmount;
     }
 
+    let fileUrlPath = '';
+    if (platform === 'telegram' && settings.telegramToken) {
+      try {
+        const getFileRes = await botRequest('https://api.telegram.org', settings.telegramToken, 'getFile', { file_id: fileId });
+        if (getFileRes && getFileRes.ok && getFileRes.result && getFileRes.result.file_path) {
+          fileUrlPath = getFileRes.result.file_path;
+        }
+      } catch (e) {
+        console.error('Error getting telegram file_path:', e);
+      }
+    }
+
+    const receiptImageValue = fileUrlPath || `file_id_${fileId}`;
+
     const newTrans = {
       id: 3000 + transactions.length + 1,
       userIdentifier: userMap.phone,
@@ -442,7 +482,7 @@ export async function handleBotUpdate(platform: 'telegram' | 'bale', update: any
       description: `رسید کارت به کارت ارسالی از بات ${platformName}`,
       type: 'credit' as const,
       status: 'pending' as const,
-      receiptImage: `file_id_${fileId}`,
+      receiptImage: receiptImageValue,
       createdAt: new Date().toISOString()
     };
     transactions.push(newTrans);
@@ -456,7 +496,7 @@ export async function handleBotUpdate(platform: 'telegram' | 'bale', update: any
       getUserKeyboard(isAdmin)
     );
     
-    const adminMsg = `📸 **رسید بانکی تصویری جدید از بات ${platformName}!**\n\n👤 فرستنده (تلفن): ${userMap.phone}\n💰 مبلغ درخواستی: ${reqAmount > 0 ? reqAmount.toLocaleString('fa-IR') + ' تومان' : 'نامشخص'}\n🆔 شناسه تراکنش: #${newTrans.id}\n\nجهت بررسی و تایید/رد تراکنش به پنل ادمین مراجعه نمایید.`;
+    const adminMsg = `📸 **رسید بانکی تصویری جدید از بات ${platformName}!**\n\n👤 فرستنده (تلفن): ${userMap.phone}\n💰 مبلغ درخواستی: ${reqAmount > 0 ? reqAmount.toLocaleString('fa-IR') + ' تومان' : 'نامشخص'}\n🆔 شناسه تراکنش: #${newTrans.id}\n\nجهت بررسی و تایید/رد تراکنش می‌توانید از دکمه‌های زیر استفاده کنید یا به پنل وب‌سایت مراجعه نمایید.`;
     
     const adminInlineKeyboard = [
       [
@@ -497,7 +537,7 @@ export async function handleBotUpdate(platform: 'telegram' | 'bale', update: any
       `💡 جهت شارژ کیف پول، روش مورد نظر خود را انتخاب نمایید:`;
 
     const topupButtons: any[] = [];
-    if (settings.onlinePaymentEnabled && settings.onlinePaymentUrl) {
+    if (settings.onlinePaymentEnabled && settings.onlinePaymentUrl && settings.onlinePaymentUrl.trim() !== '' && settings.onlinePaymentUrl !== 'https://zarinpal.com/digital_store') {
       topupButtons.push([{ text: `💳 شارژ آنلاین (درگاه زرین‌پال)`, callback_data: `start_topup_online` }]);
     }
     if (settings.cardPaymentEnabled) {
@@ -570,6 +610,7 @@ export async function handleBotUpdate(platform: 'telegram' | 'bale', update: any
                 `پس از واریز، تصویر رسید را ارسال کنید تا ادمین تایید کند.`
             );
             state.pendingTopupAmount = amount;
+            delete state.pendingTopupType;
         }
         return;
     }
@@ -611,23 +652,50 @@ export async function handleBotUpdate(platform: 'telegram' | 'bale', update: any
   }
 
   // --- Callback Handlers for Topup and Purchases ---
-  if (text.startsWith('approve_trans_')) {
-    const transId = parseInt(text.split('_')[2], 10);
-    const trans = transactions.find(t => t.id === transId);
-    if (trans && trans.status === 'pending') {
-      trans.status = 'approved';
-      const user = users.find(u => u.phone === trans.userIdentifier);
-      if (user) { user.walletBalance = (user.walletBalance || 0) + trans.amount; }
-      saveDatabase();
-      await reply(`✅ تراکنش #${trans.id} تایید شد.`);
-      const botUser = botUsers.find(b => b.phone === trans.userIdentifier);
-      if (botUser) {
-        const userMsg = `✅ مبلغ **${trans.amount.toLocaleString('fa-IR')} تومان** به کیف پول شما واریز شد.`;
-        if (botUser.telegramChatId) botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', { chat_id: botUser.telegramChatId, text: userMsg });
-        if (botUser.baleChatId) botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', { chat_id: botUser.baleChatId, text: userMsg });
-      }
+  if (text.startsWith('approve_trans_') || text.startsWith('reject_trans_')) {
+    if (!isAdmin) {
+      await reply("⚠️ شما دسترسی انجام این کار را ندارید.");
+      return;
     }
-    return;
+
+    if (text.startsWith('approve_trans_')) {
+      const transId = parseInt(text.split('_')[2], 10);
+      const trans = transactions.find(t => t.id === transId);
+      if (trans && trans.status === 'pending') {
+        trans.status = 'approved';
+        const user = users.find(u => u.phone === trans.userIdentifier || u.email === trans.userIdentifier);
+        if (user) { 
+          user.walletBalance = (user.walletBalance || 0) + trans.amount; 
+        }
+        saveDatabase();
+        await reply(`✅ تراکنش #${trans.id} با موفقیت تایید شد و حساب کاربر شارژ گردید.`);
+        const botUser = botUsers.find(b => b.phone === trans.userIdentifier);
+        if (botUser) {
+          const userMsg = `✅ **تراکنش شما تایید شد!**\n\nمبلغ **${trans.amount.toLocaleString('fa-IR')} تومان** به کیف پول شما در دیجیتال استور واریز شد.`;
+          if (botUser.telegramChatId && settings.telegramToken) botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', { chat_id: botUser.telegramChatId, text: userMsg });
+          if (botUser.baleChatId && settings.baleToken) botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', { chat_id: botUser.baleChatId, text: userMsg });
+        }
+      } else if (trans) {
+        await reply(`⚠️ این تراکنش قبلاً با وضعیت "${trans.status}" تعیین تکلیف شده است.`);
+      } else {
+        await reply(`❌ تراکنش یافت نشد.`);
+      }
+      return;
+    }
+
+    if (text.startsWith('reject_trans_')) {
+      const transId = parseInt(text.split('_')[2], 10);
+      const trans = transactions.find(t => t.id === transId);
+      if (trans && trans.status === 'pending') {
+        userCheckoutStates[chat.id] = { waitingForRejectReasonTransId: transId };
+        await reply(`❌ **درخواست رد تراکنش #${transId}**\n\nلطفاً علت رد کردن این فیش را تایپ و ارسال نمایید:`);
+      } else if (trans) {
+        await reply(`⚠️ این تراکنش قبلاً با وضعیت "${trans.status}" تعیین تکلیف شده است.`);
+      } else {
+        await reply(`❌ تراکنش یافت نشد.`);
+      }
+      return;
+    }
   }
 
   if (text.startsWith('buy_')) {

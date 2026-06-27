@@ -1185,7 +1185,7 @@ export default function Admin() {
                             <td className="py-4 px-4 text-center font-mono">
                               {tx.receiptImage ? (
                                 <a
-                                  href={tx.receiptImage.startsWith('http') ? tx.receiptImage : `https://api.telegram.org/file/bot${adminSettings.telegramToken}/${tx.receiptImage}`}
+                                  href={tx.receiptImage.startsWith('http') || tx.receiptImage.startsWith('data:') ? tx.receiptImage : `https://api.telegram.org/file/bot${adminSettings.telegramToken}/${tx.receiptImage}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="text-indigo-400 hover:underline text-xs bg-indigo-500/5 px-2.5 py-1.5 rounded-lg border border-indigo-500/10 transition-all"
@@ -1218,12 +1218,17 @@ export default function Admin() {
                                   </button>
                                   <button
                                     onClick={() => {
-                                      if (confirm('آیا مایل به رد این درخواست پرداخت هستید؟')) {
-                                        fetch(`/api/admin/transactions/${tx.id}/reject`, { method: 'POST' })
+                                      const reason = prompt('لطفاً علت رد کردن این فیش را وارد نمایید:');
+                                      if (reason !== null) {
+                                        fetch(`/api/admin/transactions/${tx.id}/reject`, { 
+                                          method: 'POST',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ reason })
+                                        })
                                           .then(r => r.json())
                                           .then(res => {
                                             if (res.success) {
-                                              alert('درخواست رد شد.');
+                                              alert('درخواست با موفقیت رد شد.');
                                               loadAllData();
                                             }
                                           });

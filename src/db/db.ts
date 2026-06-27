@@ -119,7 +119,7 @@ export let settings: Settings = {
   contactEmail: 'info@digitalstore.com',
   contactAddress: 'تهران، خیابان ولیعصر، برج فناوری دیجیتال، طبقه ۵',
   heroVideoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-futuristic-subway-station-with-neon-lights-40134-large.mp4',
-  onlinePaymentUrl: 'https://zarinpal.com/digital_store',
+  onlinePaymentUrl: '',
   cardNo: '6037991823456789',
   cardHolder: 'محمدحسین علوی',
   cardBank: 'بانک ملی ایران',

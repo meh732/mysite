@@ -9,7 +9,7 @@ import {
   groups, subGroups, products, orders, users, chats, settings, botUsers, tickets, transactions,
   loadDatabase, saveDatabase, formatPriceToman, parsePrice, otps
 } from './src/db/db';
-import { botRequest } from './src/bot/botService';
+import { botRequest, sendBotPhotoBase64 } from './src/bot/botService';
 import { pollTelegram, pollBale } from './src/bot/botPolling';
 
 async function startServer() {
@@ -185,7 +185,7 @@ async function startServer() {
   });
 
   app.post('/api/wallet/topup', (req, res) => {
-    const { userIdentifier, amount, method, cardHolderName } = req.body;
+    const { userIdentifier, amount, method, cardHolderName, receiptImage } = req.body;
     const user = users.find(u => u.email === userIdentifier || u.phone === userIdentifier);
     if (!user) {
       return res.status(404).json({ success: false, message: 'کاربر مورد نظر یافت نشد.' });
@@ -218,6 +218,7 @@ async function startServer() {
         ? `شارژ مستقیم از درگاه بانکی - پرداخت‌کننده: ${cardHolderName || 'نامشخص'}` 
         : `درخواست کارت به کارت - فرستنده: ${cardHolderName || 'نامشخص'}`,
       status: isOnline ? 'approved' as const : 'pending' as const,
+      receiptImage: receiptImage || null,
       createdAt: new Date().toISOString()
     };
 
@@ -228,6 +229,27 @@ async function startServer() {
 
     transactions.push(newTransaction);
     saveDatabase();
+
+    // If card payment (not online) and receiptImage is uploaded, notify the admin in the bot!
+    if (!isOnline && receiptImage) {
+      const adminMsg = `📸 **رسید بانکی تصویری جدید از وب‌سایت!**\n\n👤 فرستنده (تلفن/ایمیل): ${userIdentifier}\n💰 مبلغ درخواستی: ${amt.toLocaleString('fa-IR')} تومان\n🆔 شناسه تراکنش: #${newTransaction.id}\n\nجهت بررسی و تایید/رد تراکنش می‌توانید از دکمه‌های زیر استفاده کنید یا به پنل وب‌سایت مراجعه نمایید.`;
+      
+      const adminInlineKeyboard = [
+        [
+          { text: '✅ تایید', callback_data: `approve_trans_${newTransaction.id}` },
+          { text: '❌ رد', callback_data: `reject_trans_${newTransaction.id}` }
+        ]
+      ];
+
+      if (settings.adminTelegramChatId && settings.telegramToken) {
+        sendBotPhotoBase64('https://api.telegram.org', settings.telegramToken, settings.adminTelegramChatId, adminMsg, receiptImage, adminInlineKeyboard)
+          .catch(err => console.error('Error sending receipt to Telegram admin:', err));
+      }
+      if (settings.adminBaleChatId && settings.baleToken) {
+        sendBotPhotoBase64('https://tapi.bale.ai', settings.baleToken, settings.adminBaleChatId, adminMsg, receiptImage, adminInlineKeyboard)
+          .catch(err => console.error('Error sending receipt to Bale admin:', err));
+      }
+    }
 
     res.json({
       success: true,
@@ -255,6 +277,58 @@ async function startServer() {
     } else {
       res.status(401).json({ message: 'Unauthorized' });
     }
+  });
+
+  app.get('/api/admin/transactions', (req, res) => {
+    res.json(transactions);
+  });
+
+  app.post('/api/admin/transactions/:id/approve', (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    const trans = transactions.find(t => t.id === id);
+    if (!trans) return res.status(404).json({ success: false, message: 'تراکنش یافت نشد' });
+    
+    if (trans.status === 'pending') {
+      trans.status = 'approved';
+      const user = users.find(u => u.phone === trans.userIdentifier || u.email === trans.userIdentifier);
+      if (user) {
+        user.walletBalance = (user.walletBalance || 0) + trans.amount;
+      }
+      saveDatabase();
+      
+      // Notify the user via Bot
+      const botUser = botUsers.find(b => b.phone === trans.userIdentifier);
+      if (botUser) {
+        const userMsg = `✅ **تراکنش شما تایید شد!**\n\nمبلغ **${trans.amount.toLocaleString('fa-IR')} تومان** به کیف پول شما در دیجیتال استور واریز شد.`;
+        if (botUser.telegramChatId && settings.telegramToken) botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', { chat_id: botUser.telegramChatId, text: userMsg });
+        if (botUser.baleChatId && settings.baleToken) botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', { chat_id: botUser.baleChatId, text: userMsg });
+      }
+    }
+    res.json({ success: true });
+  });
+
+  app.post('/api/admin/transactions/:id/reject', (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    const trans = transactions.find(t => t.id === id);
+    if (!trans) return res.status(404).json({ success: false, message: 'تراکنش یافت نشد' });
+    
+    if (trans.status === 'pending') {
+      const { reason } = req.body;
+      trans.status = 'rejected';
+      if (reason) {
+        trans.description = trans.description + ` | علت رد: ${reason}`;
+      }
+      saveDatabase();
+      
+      // Notify the user via Bot
+      const botUser = botUsers.find(b => b.phone === trans.userIdentifier);
+      if (botUser) {
+        const userMsg = `❌ **فیش واریزی شما رد شد!**\n\n💰 مبلغ: ${trans.amount.toLocaleString('fa-IR')} تومان\n📝 علت رد درخواست: ${reason || 'توسط مدیریت رد شد'}`;
+        if (botUser.telegramChatId && settings.telegramToken) botRequest('https://api.telegram.org', settings.telegramToken, 'sendMessage', { chat_id: botUser.telegramChatId, text: userMsg });
+        if (botUser.baleChatId && settings.baleToken) botRequest('https://tapi.bale.ai', settings.baleToken, 'sendMessage', { chat_id: botUser.baleChatId, text: userMsg });
+      }
+    }
+    res.json({ success: true });
   });
 
   // --- Vite / Static Files ---
